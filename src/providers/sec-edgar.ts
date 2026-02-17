@@ -311,8 +311,9 @@ async function executeFinancials(
 	// Sort by date descending
 	statements.sort((a, b) => (b.date > a.date ? 1 : a.date > b.date ? -1 : 0))
 
+	const maxResults = (args.limit as number | undefined) ?? 10
 	return {
-		data: statements.slice(0, 10),
+		data: statements.slice(0, maxResults),
 		source: 'sec-edgar',
 		cached: false,
 	}
@@ -413,11 +414,12 @@ async function executeInsiders(
 
 	const transactions: InsiderTransaction[] = []
 
+	const insiderLimit = (args.limit as number | undefined) ?? 20
 	if (res.ok) {
 		const data = (await res.json()) as EdgarSearchResponse
 		const hits = data.hits?.hits ?? []
 
-		for (const hit of hits.slice(0, 20)) {
+		for (const hit of hits.slice(0, insiderLimit)) {
 			const displayName = hit.display_names?.[0] ?? hit.entity_name ?? 'Unknown'
 			transactions.push({
 				name: displayName,

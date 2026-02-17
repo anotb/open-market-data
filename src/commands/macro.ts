@@ -1,7 +1,17 @@
 import type { Command } from 'commander'
 import { formatKeyValue, formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
-import type { GlobalOptions, MacroSeries, OutputFormat, SearchResult } from '../types.js'
+import type { GlobalOptions, MacroSeries, OutputFormat } from '../types.js'
+
+// FRED search returns this shape (not SearchResult)
+interface FredSearchResult {
+	id: string
+	title: string
+	units: string
+	frequency: string
+	seasonal_adjustment: string
+	popularity: number
+}
 
 function displaySeries(
 	series: MacroSeries,
@@ -36,7 +46,7 @@ export function registerMacroCommand(program: Command): void {
 		.option('-l, --limit <n>', 'number of results', '20')
 		.action(async (query: string, cmdOpts: { limit: string }) => {
 			const opts = program.opts<GlobalOptions>()
-			const result = await route<SearchResult[]>(
+			const result = await route<FredSearchResult[]>(
 				'macro',
 				'search',
 				{
@@ -49,8 +59,8 @@ export function registerMacroCommand(program: Command): void {
 				},
 			)
 
-			const rows = result.data.map((r) => [r.symbol, r.name, r.type ?? '', r.source ?? ''])
-			console.log(formatTable(['Series ID', 'Title', 'Type', 'Source'], rows, opts.format))
+			const rows = result.data.map((r) => [r.id, r.title, r.frequency ?? '', r.units ?? ''])
+			console.log(formatTable(['Series ID', 'Title', 'Frequency', 'Units'], rows, opts.format))
 		})
 
 	macro
