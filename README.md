@@ -5,13 +5,16 @@ Stock prices, financial statements, crypto, economic indicators — all from fre
 ```
 $ omd quote AAPL
 
-Symbol    : AAPL
-Price     : $265.27
-Change    : +$9.49 (+3.71%)
-Volume    : 62M
-Market Cap: $3.97T
-Day Range : $255.00 — $266.29
-Source    : yahoo
+**Symbol    **: AAPL
+**Price     **: $263.88
+**Change    **: $8.10 (+3.17%)
+**Volume    **: 58M
+**Market Cap**: 3.88T
+**Day Range **: $255.54 — $266.29
+**52w Range **: $169.21 — $288.62
+**Open      **: $258.05
+**Prev Close**: $255.78
+**Source    **: yahoo
 ```
 
 ## Use with AI agents

@@ -63,7 +63,7 @@ omd --plain quote AAPL
 # Force specific source
 omd quote AAPL --source finnhub
 omd financials AAPL --source sec-edgar
-omd macro GDP --source worldbank
+omd macro NY.GDP.MKTP.CD --source worldbank
 
 # Bypass cache
 omd --no-cache quote AAPL
