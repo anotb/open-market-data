@@ -2,20 +2,15 @@
 
 Stock prices, financial statements, crypto, economic indicators — all from free public APIs. Works as a CLI tool or as a skill for AI agents.
 
-```
-$ omd quote AAPL
+## Install
 
-**Symbol    **: AAPL
-**Price     **: $263.88
-**Change    **: $8.10 (+3.17%)
-**Volume    **: 58M
-**Market Cap**: 3.88T
-**Day Range **: $255.54 — $266.29
-**52w Range **: $169.21 — $288.62
-**Open      **: $258.05
-**Prev Close**: $255.78
-**Source    **: yahoo
+Requires Node.js 20 or later.
+
+```bash
+npm install -g open-market-data
 ```
+
+No API keys are needed to get started. Stock quotes, financials, SEC filings, insider trades, and crypto prices all work immediately. Adding free API keys unlocks FRED economic data, CoinGecko rankings, Finnhub quotes, and Alpha Vantage as a fallback.
 
 ## Use with AI agents
 
@@ -34,15 +29,24 @@ cp -r skills/open-market-data ~/.claude/skills/
 
 The skill file is at `skills/open-market-data/SKILL.md`. It tells the agent what commands are available, when to use `--json` for structured output, and how to pick the right command for a given question.
 
-## Install
+## Data sources
 
-Requires Node.js 20 or later.
+Everything is free. `omd` picks the best source automatically and tries the next one if it fails.
 
-```bash
-npm install -g open-market-data
-```
+| Source | API Key | What it has |
+|--------|---------|------------|
+| SEC EDGAR | Not needed | Filings, financial statements (XBRL), insider trades |
+| Yahoo Finance | Not needed | Stock quotes, price history, options, earnings, dividends |
+| Binance | Not needed | Crypto prices and candles |
+| World Bank | Not needed | Global economic indicators (GDP, unemployment, inflation) |
+| FRED | Free | 800K+ US economic time series |
+| CoinGecko | Free | Crypto market data and rankings |
+| Finnhub | Free | Stock quotes, earnings |
+| Alpha Vantage | Free | Stock quotes, financial statements, price history |
 
-No API keys are needed to get started. Stock quotes, financials, SEC filings, insider trades, and crypto prices all work immediately. Adding free API keys unlocks FRED economic data, CoinGecko rankings, Finnhub quotes, and Alpha Vantage as a fallback.
+"Free" means you sign up and get a key at no cost. See [API keys](#api-keys) below.
+
+Run `omd sources` to see which providers are active on your machine. See [docs/PROVIDERS.md](docs/PROVIDERS.md) for rate limits and additional details on each source.
 
 ## What you can look up
 
@@ -83,25 +87,6 @@ omd macro UNRATE --limit 12
 omd macro search "inflation"
 ```
 
-## Data sources
-
-Everything is free. `omd` picks the best source automatically and tries the next one if it fails.
-
-| Source | API Key | What it has |
-|--------|---------|------------|
-| SEC EDGAR | Not needed | Filings, financial statements (XBRL), insider trades |
-| Yahoo Finance | Not needed | Stock quotes, price history, options, earnings, dividends |
-| Binance | Not needed | Crypto prices and candles |
-| World Bank | Not needed | Global economic indicators (GDP, unemployment, inflation) |
-| FRED | Free | 800K+ US economic time series |
-| CoinGecko | Free | Crypto market data and rankings |
-| Finnhub | Free | Stock quotes, earnings |
-| Alpha Vantage | Free | Stock quotes, financial statements, price history |
-
-"Free" means you sign up and get a key at no cost. See [API keys](#api-keys) below.
-
-Run `omd sources` to see which providers are active on your machine.
-
 ## API keys
 
 Four sources need a free API key. The rest work out of the box.
@@ -140,10 +125,6 @@ You can force a specific source with `--source`:
 omd quote AAPL --source finnhub
 omd macro NY.GDP.MKTP.CD --source worldbank
 ```
-
-## More provider details
-
-See [docs/PROVIDERS.md](docs/PROVIDERS.md) for full documentation on each data source, rate limits, and a list of additional sources we plan to add.
 
 ## License
 
