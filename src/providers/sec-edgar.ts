@@ -5,7 +5,7 @@ import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './
 
 const SEARCH_BASE = 'https://efts.sec.gov'
 const DATA_BASE = 'https://data.sec.gov'
-const DEFAULT_USER_AGENT = 'open-market-data/0.1.0 (dev@open-market-data.dev)'
+const DEFAULT_USER_AGENT = 'open-market-data (dev@example.com)'
 let userAgentWarned = false
 
 // --- Ticker map cache ---
