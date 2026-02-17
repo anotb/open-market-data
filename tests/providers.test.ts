@@ -90,7 +90,7 @@ describe('binance provider (real API)', () => {
 			const result = await binance.execute<CryptoQuote>('crypto', 'quote', { symbol: 'BTC' })
 			expect(result.source).toBe('binance')
 			expect(result.data.price).toBeGreaterThan(0)
-			expect(result.data.symbol).toBe('BTCUSDT')
+			expect(result.data.symbol).toBe('BTC')
 		} catch (err) {
 			// Binance is geo-restricted in some regions (451)
 			expect((err as Error).message).toContain('Binance')

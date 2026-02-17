@@ -107,6 +107,7 @@ function mapFinancials(
 }
 
 function toDateString(v: unknown): string {
+	if (v == null) return ''
 	if (v instanceof Date) return v.toISOString().split('T')[0]
 	if (typeof v === 'number') return new Date(v * 1000).toISOString().split('T')[0]
 	if (typeof v === 'string' && v.includes('T')) return v.split('T')[0]

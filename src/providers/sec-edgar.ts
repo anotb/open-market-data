@@ -458,8 +458,6 @@ async function executeInsiders(
 	}
 
 	return { data: transactions.slice(0, insiderLimit), source: 'sec-edgar', cached: false }
-
-	return { data: transactions, source: 'sec-edgar', cached: false }
 }
 
 // --- Provider definition ---

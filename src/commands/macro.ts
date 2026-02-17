@@ -91,8 +91,9 @@ export function registerMacroCommand(program: Command): void {
 	// Allow bare `omd macro GDP` as shorthand for `omd macro get GDP`
 	macro
 		.action(async (seriesIdOrCmd: string, cmdOpts: { start?: string; end?: string; limit?: string }) => {
-			// If first arg looks like a series ID (all caps, no spaces), treat as `get`
-			if (seriesIdOrCmd && /^[A-Z0-9_]+$/.test(seriesIdOrCmd)) {
+			// If first arg looks like a series ID (alphanumeric, no spaces), treat as `get`
+			if (seriesIdOrCmd && /^[A-Za-z0-9_]+$/.test(seriesIdOrCmd)) {
+				seriesIdOrCmd = seriesIdOrCmd.toUpperCase()
 				const opts = program.opts<GlobalOptions>()
 				const result = await route<MacroSeries>(
 					'macro',

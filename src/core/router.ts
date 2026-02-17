@@ -53,8 +53,8 @@ export async function route<T = unknown>(
 			const cached_data = cache.get<T>(options.source, category, cacheKey)
 			if (cached_data) return { data: cached_data, source: options.source, cached: true }
 		} else {
-			// Try any provider's cache
-			for (const p of providers) {
+			// Try cache from providers that support this category
+			for (const p of providers.filter((p) => p.capabilities.includes(category))) {
 				const cached_data = cache.get<T>(p.name, category, cacheKey)
 				if (cached_data) return { data: cached_data, source: p.name, cached: true }
 			}
