@@ -1,6 +1,31 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+
+// Load .env file if present (minimal dotenv — no dependency needed)
+function loadEnvFile(): void {
+	const envPath = resolve(process.cwd(), '.env')
+	if (!existsSync(envPath)) return
+	try {
+		const content = readFileSync(envPath, 'utf-8')
+		for (const line of content.split('\n')) {
+			const trimmed = line.trim()
+			if (!trimmed || trimmed.startsWith('#')) continue
+			const eqIdx = trimmed.indexOf('=')
+			if (eqIdx === -1) continue
+			const key = trimmed.slice(0, eqIdx).trim()
+			const val = trimmed.slice(eqIdx + 1).trim()
+			// Don't override existing env vars
+			if (process.env[key] === undefined) {
+				process.env[key] = val
+			}
+		}
+	} catch {
+		// Ignore read errors
+	}
+}
+
+loadEnvFile()
 
 export interface OmdConfig {
 	fredApiKey?: string
