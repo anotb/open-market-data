@@ -39,8 +39,19 @@
     "cli",
     "market-data"
   ],
-  "author": "",
+  "author": "anotb",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anotb/open-market-data.git"
+  },
+  "homepage": "https://github.com/anotb/open-market-data",
+  "files": [
+    "dist",
+    "skills",
+    "LICENSE",
+    "README.md"
+  ],
   "dependencies": {
     "commander": "^13.1.0",
     "yahoo-finance2": "^3.13.0",

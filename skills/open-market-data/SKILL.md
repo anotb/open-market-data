@@ -5,7 +5,15 @@ version: 0.1.0
 tags: [finance, stocks, crypto, macro, sec, edgar, fred]
 tools: [Bash]
 metadata:
-  openclaw: true
+  openclaw:
+    requires:
+      bins: [node, omd]
+    install:
+      - kind: node
+        package: open-market-data
+        bins: [omd]
+    homepage: https://github.com/anotb/open-market-data
+    emoji: "\U0001F4C8"
 ---
 
 # open-market-data (omd)
