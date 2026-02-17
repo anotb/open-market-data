@@ -46,7 +46,9 @@ export function registerCryptoCommand(program: Command): void {
 					opts.format,
 				),
 			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 
 	crypto
@@ -82,7 +84,9 @@ export function registerCryptoCommand(program: Command): void {
 			console.log(
 				formatTable(['Time', 'Open', 'High', 'Low', 'Close', 'Volume'], rows, opts.format),
 			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 
 	// Default: `omd crypto BTC` → quote

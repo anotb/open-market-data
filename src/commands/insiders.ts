@@ -30,10 +30,12 @@ export function registerInsidersCommand(program: Command): void {
 				t.description ?? '',
 			])
 
-			console.log(
-				formatTable(['Filer', 'Filed', 'Form', 'Description'], rows, opts.format),
-			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
-			console.log('Note: For transaction details (shares, price), view the actual Form 4 filing on SEC.gov.')
+			console.log(formatTable(['Filer', 'Filed', 'Form', 'Description'], rows, opts.format))
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+				console.log(
+					'Note: For transaction details (shares, price), view the actual Form 4 filing on SEC.gov.',
+				)
+			}
 		})
 }

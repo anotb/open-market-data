@@ -1,3 +1,4 @@
+import { loadConfig } from '../core/config.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { FinancialStatement, HistoricalQuote, QuoteResult, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult } from './types.js'
@@ -6,9 +7,11 @@ const SOURCE = 'alphavantage'
 const BASE_URL = 'https://www.alphavantage.co/query'
 
 function getApiKey(): string {
-	const key = process.env.ALPHA_VANTAGE_API_KEY
+	const key = loadConfig().alphaVantageApiKey
 	if (!key) {
-		throw new Error(`[${SOURCE}] ALPHA_VANTAGE_API_KEY not set`)
+		throw new Error(
+			`[${SOURCE}] ALPHA_VANTAGE_API_KEY not set. Run: omd config set alphaVantageApiKey <key>`,
+		)
 	}
 	return key
 }
@@ -36,11 +39,11 @@ async function avFetch<T>(params: Record<string, string>): Promise<T> {
 	if (data['Error Message']) {
 		throw new Error(`[${SOURCE}] ${data['Error Message'] as string}`)
 	}
-	if (data['Note']) {
-		throw new Error(`[${SOURCE}] ${data['Note'] as string}`)
+	if (data.Note) {
+		throw new Error(`[${SOURCE}] ${data.Note as string}`)
 	}
-	if (data['Information']) {
-		throw new Error(`[${SOURCE}] ${data['Information'] as string}`)
+	if (data.Information) {
+		throw new Error(`[${SOURCE}] ${data.Information as string}`)
 	}
 
 	return data as T
@@ -99,7 +102,9 @@ interface AVTimeSeries {
 	'5. volume': string
 }
 
-async function searchSymbols(args: Record<string, unknown>): Promise<ProviderResult<SearchResult[]>> {
+async function searchSymbols(
+	args: Record<string, unknown>,
+): Promise<ProviderResult<SearchResult[]>> {
 	const query = args.query as string
 	if (!query) throw new Error(`[${SOURCE}] search requires query`)
 
@@ -152,7 +157,9 @@ async function getQuote(args: Record<string, unknown>): Promise<ProviderResult<Q
 	return { data: result, source: SOURCE, cached: false }
 }
 
-async function getFinancials(args: Record<string, unknown>): Promise<ProviderResult<FinancialStatement[]>> {
+async function getFinancials(
+	args: Record<string, unknown>,
+): Promise<ProviderResult<FinancialStatement[]>> {
 	const symbol = args.symbol as string
 	if (!symbol) throw new Error(`[${SOURCE}] financials requires symbol`)
 
@@ -201,7 +208,9 @@ async function getFinancials(args: Record<string, unknown>): Promise<ProviderRes
 	return { data: statements, source: SOURCE, cached: false }
 }
 
-async function getHistory(args: Record<string, unknown>): Promise<ProviderResult<HistoricalQuote[]>> {
+async function getHistory(
+	args: Record<string, unknown>,
+): Promise<ProviderResult<HistoricalQuote[]>> {
 	const symbol = args.symbol as string
 	if (!symbol) throw new Error(`[${SOURCE}] history requires symbol`)
 
@@ -243,7 +252,7 @@ export const alphaVantage: Provider = {
 	rateLimits: { maxRequests: 25, windowMs: 86_400_000 },
 
 	isEnabled(): boolean {
-		return !!process.env.ALPHA_VANTAGE_API_KEY
+		return !!loadConfig().alphaVantageApiKey
 	},
 
 	async execute<T = unknown>(

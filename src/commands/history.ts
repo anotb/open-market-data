@@ -35,6 +35,8 @@ export function registerHistoryCommand(program: Command): void {
 			console.log(
 				formatTable(['Date', 'Open', 'High', 'Low', 'Close', 'Volume'], rows, opts.format),
 			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 }

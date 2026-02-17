@@ -10,21 +10,34 @@ metadata:
 
 # open-market-data (omd)
 
-Unified CLI for free financial data. Queries SEC EDGAR, Yahoo Finance, Binance, CoinGecko, and FRED behind a single interface with smart source routing.
+Unified CLI for free financial data. Queries 8 sources behind a single interface with automatic routing and fallback.
 
 ## Quick Reference
 
 ```bash
 # Stock quotes
 omd quote AAPL
-omd quote AAPL MSFT GOOGL        # concurrent multi-symbol
+omd quote AAPL MSFT GOOGL
 
-# Company search
+# Search
 omd search "Apple Inc"
 
-# Financial statements (SEC EDGAR XBRL)
-omd financials AAPL               # annual (default)
-omd financials AAPL -p quarterly
+# Financial statements
+omd financials AAPL
+omd financials AAPL -p quarterly -l 8
+
+# Price history
+omd history AAPL --days 90
+
+# Earnings
+omd earnings AAPL
+
+# Dividends
+omd dividends AAPL
+
+# Options chain
+omd options AAPL
+omd options AAPL -t call
 
 # SEC filings
 omd filing AAPL --type 10-K --latest
@@ -34,27 +47,33 @@ omd filing TSLA --type 8-K -l 5
 omd insiders AAPL
 
 # Crypto
-omd crypto BTC                    # current price
-omd crypto top 20                 # market rankings (CoinGecko)
-omd crypto history ETH -d 30      # 30-day OHLCV
+omd crypto BTC
+omd crypto top 20
+omd crypto history ETH -d 30
 
-# Macroeconomic data (FRED)
-omd macro get GDP --start 2020-01-01
+# Macroeconomic data
+omd macro GDP
+omd macro GDP --limit 12
 omd macro search "unemployment rate"
 
 # Output formats
-omd --json quote AAPL             # JSON
-omd --plain quote AAPL            # tab-separated
+omd --json quote AAPL
+omd --plain quote AAPL
 
 # Force specific source
-omd quote AAPL --source yahoo
+omd quote AAPL --source finnhub
 omd financials AAPL --source sec-edgar
+omd macro GDP --source worldbank
 
 # Bypass cache
 omd --no-cache quote AAPL
 
-# Source status
+# See all sources and their status
 omd sources
+
+# Configure API keys
+omd config set fredApiKey <key>
+omd config show
 ```
 
 ## Sources
@@ -62,29 +81,58 @@ omd sources
 | Source | Key? | Best For |
 |--------|------|----------|
 | SEC EDGAR | No | Filings, XBRL financials, insider transactions |
-| Yahoo Finance | No | Real-time quotes, search |
+| Yahoo Finance | No | Real-time quotes, price history, options, dividends |
 | Binance | No | Crypto prices (non-US only) |
-| CoinGecko | Free key | Crypto rankings, broader coverage |
+| CoinGecko | Free key | Crypto rankings, broader crypto coverage |
 | FRED | Free key | GDP, unemployment, interest rates, 800K+ economic series |
+| Finnhub | Free key | Real-time stock quotes, earnings data |
+| Alpha Vantage | Free key | Stock quotes, financials, price history (25/day limit) |
+| World Bank | No | Global economic indicators (GDP, unemployment, inflation) |
+
+## When to Use --json
+
+Use `--json` when you need to parse the output programmatically. Always place `--json` before the command:
+
+```bash
+omd --json quote AAPL
+omd --json financials AAPL -p quarterly
+omd --json crypto top 10
+omd --json macro GDP --limit 5
+```
 
 ## Configuration
 
-API keys via env vars or `~/.omd/config.json`:
+API keys via env vars or CLI:
 
 ```bash
 export FRED_API_KEY=your_key
 export COINGECKO_API_KEY=your_key
+export FINNHUB_API_KEY=your_key
+export ALPHA_VANTAGE_API_KEY=your_key
 export EDGAR_USER_AGENT="YourCompany you@email.com"
 
-# Or use CLI
+# Or use CLI config
 omd config set fredApiKey your_key
 omd config set coingeckoApiKey your_key
+omd config set finnhubApiKey your_key
+omd config set alphaVantageApiKey your_key
+omd config show
 ```
 
-## Output
+## Routing
 
-Default output is markdown tables. Use `--json` for structured data or `--plain` for tab-separated values suitable for piping.
+Commands automatically route to the best available source. If the top source fails or hits its rate limit, it falls back to the next one. Use `--source <name>` to force a specific provider.
 
-## How Routing Works
-
-Commands route to the best available source automatically. If the top-priority source fails or is rate-limited, it falls back to alternatives. Use `--source <name>` to force a specific provider.
+| Data Type | Priority Order |
+|-----------|---------------|
+| Stock quotes | Yahoo → Finnhub → Alpha Vantage |
+| Financials | SEC EDGAR → Yahoo → Alpha Vantage |
+| Price history | Yahoo → Alpha Vantage |
+| Earnings | Yahoo → Finnhub |
+| Dividends | Yahoo |
+| Options | Yahoo |
+| SEC filings | SEC EDGAR |
+| Insiders | SEC EDGAR |
+| Crypto | Binance → CoinGecko |
+| Macro/economic | FRED → World Bank |
+| Search | SEC EDGAR → Yahoo → Finnhub → Alpha Vantage |

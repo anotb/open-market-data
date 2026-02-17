@@ -25,11 +25,7 @@ export function registerSourcesCommand(program: Command): void {
 			})
 
 			console.log(
-				formatTable(
-					['Source', 'Status', 'API Key', 'Categories', 'Rate Limit'],
-					rows,
-					opts.format,
-				),
+				formatTable(['Source', 'Status', 'API Key', 'Categories', 'Rate Limit'], rows, opts.format),
 			)
 		})
 }

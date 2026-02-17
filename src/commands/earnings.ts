@@ -29,14 +29,13 @@ export function registerEarningsCommand(program: Command): void {
 				e.epsEstimate != null ? e.epsEstimate.toFixed(2) : '',
 				e.epsActual != null ? e.epsActual.toFixed(2) : '',
 				e.epsEstimate != null && e.epsActual != null
-					? (e.epsActual - e.epsEstimate > 0 ? '+' : '') +
-						(e.epsActual - e.epsEstimate).toFixed(2)
+					? (e.epsActual - e.epsEstimate > 0 ? '+' : '') + (e.epsActual - e.epsEstimate).toFixed(2)
 					: '',
 			])
 
-			console.log(
-				formatTable(['Date', 'EPS Est.', 'EPS Actual', 'Surprise'], rows, opts.format),
-			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			console.log(formatTable(['Date', 'EPS Est.', 'EPS Actual', 'Surprise'], rows, opts.format))
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 }

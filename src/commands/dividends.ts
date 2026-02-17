@@ -27,6 +27,8 @@ export function registerDividendsCommand(program: Command): void {
 			const rows = result.data.map((d) => [d.date, formatCurrency(d.amount)])
 
 			console.log(formatTable(['Date', 'Amount'], rows, opts.format))
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 }

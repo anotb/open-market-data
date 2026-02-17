@@ -44,6 +44,8 @@ export function registerFinancialsCommand(program: Command): void {
 					opts.format,
 				),
 			)
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			if (opts.format !== 'json') {
+				console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			}
 		})
 }

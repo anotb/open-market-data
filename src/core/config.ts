@@ -15,10 +15,13 @@ function loadEnvFile(): void {
 			if (eqIdx === -1) continue
 			const key = trimmed.slice(0, eqIdx).trim()
 			let val = trimmed.slice(eqIdx + 1).trim()
-		// Strip surrounding quotes (single or double)
-		if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-			val = val.slice(1, -1)
-		}
+			// Strip surrounding quotes (single or double)
+			if (
+				(val.startsWith('"') && val.endsWith('"')) ||
+				(val.startsWith("'") && val.endsWith("'"))
+			) {
+				val = val.slice(1, -1)
+			}
 			// Don't override existing env vars
 			if (process.env[key] === undefined) {
 				process.env[key] = val

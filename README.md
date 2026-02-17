@@ -1,6 +1,6 @@
 # open-market-data
 
-Get stock prices, financial statements, crypto data, and economic indicators from the command line. All data comes from free public APIs.
+Stock prices, financial statements, crypto, economic indicators — all from free public APIs. Works as a CLI tool or as a skill for AI agents.
 
 ```
 $ omd quote AAPL
@@ -14,6 +14,26 @@ Day Range : $255.00 — $266.29
 Source    : yahoo
 ```
 
+## Use with AI agents
+
+If you use Claude Code, GitHub Copilot, or any agent that supports skills — `omd` comes with a skill file that teaches the agent how to use it. Your agent can then answer questions like "what are Apple's latest financials?" or "how has Bitcoin performed this month?" by running `omd` commands.
+
+```bash
+# Install the skill for Claude Code
+cp -r skills/open-market-data ~/.claude/skills/
+
+# Or install with agentskills
+npx agentskills install open-market-data
+```
+
+The skill file is at `skills/open-market-data/SKILL.md`. It tells the agent what commands are available, when to use `--json` for structured output, and how to pick the right command for a given question.
+
+## Install
+
+```bash
+npm install -g open-market-data
+```
+
 ## What you can look up
 
 **Stocks** — quotes, price history, financial statements, earnings, dividends, options chains
@@ -23,12 +43,6 @@ Source    : yahoo
 **Crypto** — prices, market rankings, historical candles
 
 **Economic data** — GDP, unemployment, inflation, interest rates, and thousands more series from FRED and the World Bank
-
-## Install
-
-```bash
-npm install -g open-market-data
-```
 
 ## Examples
 
@@ -115,18 +129,6 @@ You can force a specific source with `--source`:
 ```bash
 omd quote AAPL --source finnhub
 omd macro GDP --source worldbank
-```
-
-## AI agent skill
-
-`omd` ships with a skill file (`skills/open-market-data/SKILL.md`) that teaches AI coding agents how to use it. If you use Claude Code, Copilot, or similar tools, drop the skill file into your agent's config and it can answer finance questions by running `omd` commands.
-
-```bash
-# Claude Code
-cp -r skills/open-market-data ~/.claude/skills/
-
-# Or install with agentskills
-npx agentskills install open-market-data
 ```
 
 ## More provider details

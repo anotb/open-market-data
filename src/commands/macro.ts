@@ -19,6 +19,27 @@ function displaySeries(
 	cached: boolean,
 	format: OutputFormat,
 ): void {
+	if (format === 'json') {
+		// Single combined JSON object for machine consumption
+		console.log(
+			JSON.stringify(
+				{
+					series: series.id,
+					title: series.title,
+					units: series.units,
+					frequency: series.frequency,
+					seasonalAdjustment: series.seasonalAdjustment,
+					source,
+					cached,
+					data: series.data,
+				},
+				null,
+				2,
+			),
+		)
+		return
+	}
+
 	console.log(
 		formatKeyValue(
 			{
@@ -63,43 +84,29 @@ export function registerMacroCommand(program: Command): void {
 			console.log(formatTable(['Series ID', 'Title', 'Frequency', 'Units'], rows, opts.format))
 		})
 
+	// `omd macro get GDP` or just `omd macro GDP` (isDefault makes it the fallback)
 	macro
-		.command('get <seriesId>')
+		.command('get [seriesId]', { isDefault: true })
 		.description('Get time series data (e.g., GDP, UNRATE, CPIAUCSL)')
 		.option('-s, --start <date>', 'start date (YYYY-MM-DD)')
 		.option('-e, --end <date>', 'end date (YYYY-MM-DD)')
 		.option('-l, --limit <n>', 'number of observations')
-		.action(async (seriesId: string, cmdOpts: { start?: string; end?: string; limit?: string }) => {
-			const opts = program.opts<GlobalOptions>()
-			const result = await route<MacroSeries>(
-				'macro',
-				'get',
-				{
-					seriesId,
-					start: cmdOpts.start,
-					end: cmdOpts.end,
-					limit: cmdOpts.limit ? Number.parseInt(cmdOpts.limit, 10) : undefined,
-				},
-				{
-					source: opts.source,
-					noCache: opts.noCache,
-				},
-			)
-			displaySeries(result.data, result.source, result.cached, opts.format)
-		})
+		.action(
+			async (
+				seriesId: string | undefined,
+				cmdOpts: { start?: string; end?: string; limit?: string },
+			) => {
+				if (!seriesId) {
+					macro.help()
+					return
+				}
 
-	// Allow bare `omd macro GDP` as shorthand for `omd macro get GDP`
-	macro
-		.action(async (seriesIdOrCmd: string, cmdOpts: { start?: string; end?: string; limit?: string }) => {
-			// If first arg looks like a series ID (alphanumeric, no spaces), treat as `get`
-			if (seriesIdOrCmd && /^[A-Za-z0-9_]+$/.test(seriesIdOrCmd)) {
-				seriesIdOrCmd = seriesIdOrCmd.toUpperCase()
 				const opts = program.opts<GlobalOptions>()
 				const result = await route<MacroSeries>(
 					'macro',
 					'get',
 					{
-						seriesId: seriesIdOrCmd,
+						seriesId: seriesId.toUpperCase(),
 						start: cmdOpts.start,
 						end: cmdOpts.end,
 						limit: cmdOpts.limit ? Number.parseInt(cmdOpts.limit, 10) : undefined,
@@ -110,10 +117,6 @@ export function registerMacroCommand(program: Command): void {
 					},
 				)
 				displaySeries(result.data, result.source, result.cached, opts.format)
-			}
-		})
-		.argument('[seriesId]', 'FRED series ID (shorthand for `macro get`)')
-		.option('-s, --start <date>', 'start date')
-		.option('-e, --end <date>', 'end date')
-		.option('-l, --limit <n>', 'number of observations')
+			},
+		)
 }

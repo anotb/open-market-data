@@ -1,3 +1,4 @@
+import { loadConfig } from '../core/config.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { EarningsData, HistoricalQuote, QuoteResult, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './types.js'
@@ -11,8 +12,9 @@ const rateLimits: RateLimitConfig = {
 }
 
 function getKey(): string {
-	const key = process.env.FINNHUB_API_KEY
-	if (!key) throw new Error(`[${SOURCE}] FINNHUB_API_KEY not set`)
+	const key = loadConfig().finnhubApiKey
+	if (!key)
+		throw new Error(`[${SOURCE}] FINNHUB_API_KEY not set. Run: omd config set finnhubApiKey <key>`)
 	return key
 }
 
@@ -71,7 +73,13 @@ interface FinnhubQuote {
 }
 
 async function getQuote(symbol: string): Promise<ProviderResult<QuoteResult>> {
-	const data = await request<FinnhubQuote>(`/quote?symbol=${encodeURIComponent(symbol.toUpperCase())}`)
+	const data = await request<FinnhubQuote>(
+		`/quote?symbol=${encodeURIComponent(symbol.toUpperCase())}`,
+	)
+
+	if (data.c === 0 && data.h === 0 && data.l === 0 && data.o === 0 && data.pc === 0) {
+		throw new Error(`[${SOURCE}] No quote data for "${symbol}" — ticker may be invalid`)
+	}
 
 	return {
 		data: {
@@ -137,7 +145,9 @@ async function getHistory(symbol: string, days = 30): Promise<ProviderResult<His
 	)
 
 	if (data.s !== 'ok') {
-		throw new Error(`[${SOURCE}] Candle data not available for "${symbol}" (status: ${data.s}). This endpoint may require a paid plan.`)
+		throw new Error(
+			`[${SOURCE}] Candle data not available for "${symbol}" (status: ${data.s}). This endpoint may require a paid plan.`,
+		)
 	}
 
 	const quotes: HistoricalQuote[] = data.t.map((t, i) => ({
@@ -163,7 +173,7 @@ export const finnhub: Provider = {
 	rateLimits,
 
 	isEnabled(): boolean {
-		return !!process.env.FINNHUB_API_KEY
+		return !!loadConfig().finnhubApiKey
 	},
 
 	async execute<T = unknown>(

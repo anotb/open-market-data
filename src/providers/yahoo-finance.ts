@@ -122,8 +122,24 @@ function toNum(v: unknown): number | undefined {
 export const yahoo: Provider = {
 	name: SOURCE,
 	requiresKey: false,
-	capabilities: ['search', 'quote', 'financials', 'history', 'options', 'earnings', 'dividends'] as DataCategory[],
-	priority: { search: 3, quote: 1, financials: 2, history: 1, options: 1, earnings: 1, dividends: 1 },
+	capabilities: [
+		'search',
+		'quote',
+		'financials',
+		'history',
+		'options',
+		'earnings',
+		'dividends',
+	] as DataCategory[],
+	priority: {
+		search: 3,
+		quote: 1,
+		financials: 2,
+		history: 1,
+		options: 1,
+		earnings: 1,
+		dividends: 1,
+	},
 	rateLimits: { maxRequests: 60, windowMs: 60_000 },
 
 	isEnabled(): boolean {
@@ -175,7 +191,9 @@ export const yahoo: Provider = {
 						const results = await yf.quote(symbols)
 						const arr = results as unknown as YFQuote[]
 						if (!arr || arr.length === 0) {
-							throw new Error(`[${SOURCE}] No quote data returned for symbols: ${symbols.join(', ')}`)
+							throw new Error(
+								`[${SOURCE}] No quote data returned for symbols: ${symbols.join(', ')}`,
+							)
 						}
 						const data = arr.map(mapQuote)
 						return {
@@ -231,7 +249,10 @@ export const yahoo: Provider = {
 					)
 
 					const limit = (args.limit as number | undefined) ?? 10
-					const data = mapFinancials(results as unknown as YFFundamentalsResult[], period).slice(0, limit)
+					const data = mapFinancials(results as unknown as YFFundamentalsResult[], period).slice(
+						0,
+						limit,
+					)
 					return { data: data as T, source: SOURCE, cached: false }
 				} catch (err) {
 					if (args.verbose) {
@@ -253,8 +274,13 @@ export const yahoo: Provider = {
 					const result = await yf.chart(symbol, { period1 })
 					const raw = result as unknown as {
 						quotes?: Array<{
-							date: Date; open: number; high: number; low: number;
-							close: number; adjclose?: number; volume: number
+							date: Date
+							open: number
+							high: number
+							low: number
+							close: number
+							adjclose?: number
+							volume: number
 						}>
 					}
 					const data: HistoricalQuote[] = (raw.quotes ?? []).map((r) => ({
@@ -283,14 +309,24 @@ export const yahoo: Provider = {
 						expirationDates?: Date[]
 						options?: Array<{
 							calls?: Array<{
-								strike: number; expiration: Date; lastPrice?: number;
-								bid?: number; ask?: number; volume?: number;
-								openInterest?: number; impliedVolatility?: number
+								strike: number
+								expiration: Date
+								lastPrice?: number
+								bid?: number
+								ask?: number
+								volume?: number
+								openInterest?: number
+								impliedVolatility?: number
 							}>
 							puts?: Array<{
-								strike: number; expiration: Date; lastPrice?: number;
-								bid?: number; ask?: number; volume?: number;
-								openInterest?: number; impliedVolatility?: number
+								strike: number
+								expiration: Date
+								lastPrice?: number
+								bid?: number
+								ask?: number
+								volume?: number
+								openInterest?: number
+								impliedVolatility?: number
 							}>
 						}>
 					}
@@ -298,17 +334,27 @@ export const yahoo: Provider = {
 					for (const chain of raw.options ?? []) {
 						for (const c of chain.calls ?? []) {
 							contracts.push({
-								strike: c.strike, expiration: toDateString(c.expiration),
-								type: 'call', lastPrice: c.lastPrice, bid: c.bid, ask: c.ask,
-								volume: c.volume, openInterest: c.openInterest,
+								strike: c.strike,
+								expiration: toDateString(c.expiration),
+								type: 'call',
+								lastPrice: c.lastPrice,
+								bid: c.bid,
+								ask: c.ask,
+								volume: c.volume,
+								openInterest: c.openInterest,
 								impliedVolatility: c.impliedVolatility,
 							})
 						}
 						for (const p of chain.puts ?? []) {
 							contracts.push({
-								strike: p.strike, expiration: toDateString(p.expiration),
-								type: 'put', lastPrice: p.lastPrice, bid: p.bid, ask: p.ask,
-								volume: p.volume, openInterest: p.openInterest,
+								strike: p.strike,
+								expiration: toDateString(p.expiration),
+								type: 'put',
+								lastPrice: p.lastPrice,
+								bid: p.bid,
+								ask: p.ask,
+								volume: p.volume,
+								openInterest: p.openInterest,
 								impliedVolatility: p.impliedVolatility,
 							})
 						}

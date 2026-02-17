@@ -188,9 +188,7 @@ async function getHistory(
 	const [ohlcData, chartData] = await Promise.all([
 		request<OhlcEntry[]>(`/coins/${id}/ohlc?vs_currency=usd&days=${ohlcDays}`),
 		// Use same snapped days so volume data covers the full OHLC range
-		request<MarketChartResponse>(
-			`/coins/${id}/market_chart?vs_currency=usd&days=${ohlcDays}`,
-		),
+		request<MarketChartResponse>(`/coins/${id}/market_chart?vs_currency=usd&days=${ohlcDays}`),
 	])
 
 	// Build a volume lookup by timestamp (rounded to nearest hour)
