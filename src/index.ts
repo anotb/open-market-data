@@ -11,6 +11,10 @@ export type {
 	CryptoQuote,
 	CryptoCandle,
 	SourceInfo,
+	HistoricalQuote,
+	OptionContract,
+	EarningsData,
+	DividendEvent,
 } from './types.js'
 
 export type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './providers/types.js'

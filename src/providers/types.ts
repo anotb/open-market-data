@@ -6,6 +6,10 @@ export type DataCategory =
 	| 'insiders'
 	| 'macro'
 	| 'crypto'
+	| 'history'
+	| 'options'
+	| 'earnings'
+	| 'dividends'
 
 export interface RateLimitConfig {
 	maxRequests: number

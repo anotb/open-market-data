@@ -420,12 +420,14 @@ async function executeInsiders(
 		const hits = data.hits?.hits ?? []
 
 		for (const hit of hits.slice(0, insiderLimit)) {
-			const displayName = hit.display_names?.[0] ?? hit.entity_name ?? 'Unknown'
+			const filerName = hit.display_names?.[0] ?? hit.entity_name ?? 'Unknown Filer'
 			transactions.push({
-				name: displayName,
+				name: filerName,
 				transactionDate: hit.file_date ?? 'unknown',
 				transactionType: 'Form 4',
-				shares: 0, // Not available from search results
+				shares: 0,
+				description: hit.file_description,
+				accessionNumber: hit._id,
 				source: 'sec-edgar',
 			})
 		}

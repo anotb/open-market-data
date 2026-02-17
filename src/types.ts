@@ -68,6 +68,46 @@ export interface InsiderTransaction {
 	pricePerShare?: number
 	totalValue?: number
 	sharesOwned?: number
+	description?: string
+	accessionNumber?: string
+	source: string
+}
+
+export interface HistoricalQuote {
+	date: string
+	open: number
+	high: number
+	low: number
+	close: number
+	adjClose?: number
+	volume: number
+}
+
+export interface OptionContract {
+	strike: number
+	expiration: string
+	type: 'call' | 'put'
+	lastPrice?: number
+	bid?: number
+	ask?: number
+	volume?: number
+	openInterest?: number
+	impliedVolatility?: number
+}
+
+export interface EarningsData {
+	symbol: string
+	earningsDate?: string
+	epsEstimate?: number
+	epsActual?: number
+	revenueEstimate?: number
+	revenueActual?: number
+	source: string
+}
+
+export interface DividendEvent {
+	date: string
+	amount: number
 	source: string
 }
 

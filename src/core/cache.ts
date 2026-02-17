@@ -13,6 +13,10 @@ const TTL: Record<DataCategory, number> = {
 	insiders: 3_600_000, // 1h
 	macro: 3_600_000, // 1h
 	crypto: 15_000, // 15s
+	history: 3_600_000, // 1h
+	options: 60_000, // 1 min
+	earnings: 3_600_000, // 1h
+	dividends: 3_600_000, // 1h
 }
 
 const MAX_ENTRIES = 500

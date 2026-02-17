@@ -71,6 +71,24 @@ export async function route<T = unknown>(
 	}
 
 	if (candidates.length === 0) {
+		// Build helpful error with reasons why providers are unavailable
+		const capable = providers.filter((p) => p.capabilities.includes(category))
+		const config = loadConfig()
+		const disabledSet = new Set(config.disabledSources ?? [])
+		if (capable.length > 0) {
+			const reasons = capable.map((p) => {
+				if (!p.isEnabled()) {
+					return p.keyEnvVar
+						? `${p.name}: requires ${p.keyEnvVar} (run: omd config set ${p.keyEnvVar === 'COINGECKO_API_KEY' ? 'coingeckoApiKey' : p.keyEnvVar === 'FRED_API_KEY' ? 'fredApiKey' : p.keyEnvVar} <key>)`
+						: `${p.name}: disabled`
+				}
+				if (disabledSet.has(p.name)) return `${p.name}: disabled in config`
+				return `${p.name}: unknown`
+			})
+			throw new Error(
+				`No providers available for "${category}". Providers exist but are not enabled:\n  ${reasons.join('\n  ')}`,
+			)
+		}
 		throw new Error(`No providers available for category "${category}"`)
 	}
 

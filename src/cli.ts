@@ -5,10 +5,14 @@ import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import { registerConfigCommand } from './commands/config.js'
 import { registerCryptoCommand } from './commands/crypto.js'
+import { registerDividendsCommand } from './commands/dividends.js'
+import { registerEarningsCommand } from './commands/earnings.js'
 import { registerFilingCommand } from './commands/filing.js'
 import { registerFinancialsCommand } from './commands/financials.js'
+import { registerHistoryCommand } from './commands/history.js'
 import { registerInsidersCommand } from './commands/insiders.js'
 import { registerMacroCommand } from './commands/macro.js'
+import { registerOptionsCommand } from './commands/options.js'
 import { registerQuoteCommand } from './commands/quote.js'
 import { registerSearchCommand } from './commands/search.js'
 import { registerSourcesCommand } from './commands/sources.js'
@@ -46,6 +50,10 @@ registerAllProviders()
 registerSearchCommand(program)
 registerQuoteCommand(program)
 registerFinancialsCommand(program)
+registerHistoryCommand(program)
+registerOptionsCommand(program)
+registerEarningsCommand(program)
+registerDividendsCommand(program)
 registerFilingCommand(program)
 registerInsidersCommand(program)
 registerMacroCommand(program)

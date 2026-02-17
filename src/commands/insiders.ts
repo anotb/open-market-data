@@ -1,13 +1,13 @@
 import type { Command } from 'commander'
-import { formatCurrency, formatNumber, formatTable } from '../core/formatter.js'
+import { formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { GlobalOptions, InsiderTransaction } from '../types.js'
 
 export function registerInsidersCommand(program: Command): void {
 	program
 		.command('insiders <symbol>')
-		.description('View insider transactions')
-		.option('-l, --limit <n>', 'number of transactions', '20')
+		.description('View recent Form 4 insider filings')
+		.option('-l, --limit <n>', 'number of filings', '20')
 		.action(async (symbol: string, cmdOpts: { limit: string }) => {
 			const opts = program.opts<GlobalOptions>()
 			const result = await route<InsiderTransaction[]>(
@@ -25,22 +25,15 @@ export function registerInsidersCommand(program: Command): void {
 
 			const rows = result.data.map((t) => [
 				t.name,
-				t.title ?? '',
 				t.transactionDate,
 				t.transactionType,
-				formatNumber(t.shares, 0),
-				t.pricePerShare ? formatCurrency(t.pricePerShare) : '',
-				t.totalValue ? formatNumber(t.totalValue) : '',
+				t.description ?? '',
 			])
 
 			console.log(
-				formatTable(
-					['Name', 'Title', 'Date', 'Type', 'Shares', 'Price', 'Value'],
-					rows,
-					opts.format,
-				),
+				formatTable(['Filer', 'Filed', 'Form', 'Description'], rows, opts.format),
 			)
 			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
-			console.log('Note: Share counts are not available from EDGAR search results.')
+			console.log('Note: For transaction details (shares, price), view the actual Form 4 filing on SEC.gov.')
 		})
 }
