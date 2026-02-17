@@ -90,7 +90,7 @@ export function registerMacroCommand(program: Command): void {
 
 	// Allow bare `omd macro GDP` as shorthand for `omd macro get GDP`
 	macro
-		.action(async (seriesIdOrCmd: string, cmdOpts: Record<string, string>) => {
+		.action(async (seriesIdOrCmd: string, cmdOpts: { start?: string; end?: string; limit?: string }) => {
 			// If first arg looks like a series ID (all caps, no spaces), treat as `get`
 			if (seriesIdOrCmd && /^[A-Z0-9_]+$/.test(seriesIdOrCmd)) {
 				const opts = program.opts<GlobalOptions>()
@@ -101,6 +101,7 @@ export function registerMacroCommand(program: Command): void {
 						seriesId: seriesIdOrCmd,
 						start: cmdOpts.start,
 						end: cmdOpts.end,
+						limit: cmdOpts.limit ? Number.parseInt(cmdOpts.limit, 10) : undefined,
 					},
 					{
 						source: opts.source,
@@ -113,4 +114,5 @@ export function registerMacroCommand(program: Command): void {
 		.argument('[seriesId]', 'FRED series ID (shorthand for `macro get`)')
 		.option('-s, --start <date>', 'start date')
 		.option('-e, --end <date>', 'end date')
+		.option('-l, --limit <n>', 'number of observations')
 }

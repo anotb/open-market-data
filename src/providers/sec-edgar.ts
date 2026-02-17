@@ -204,16 +204,19 @@ function sumOptional(a: number | undefined, b: number | undefined): number | und
 
 // --- Search implementation ---
 
-interface EdgarSearchHit {
-	file_num?: string
-	film_num?: string
-	_id: string
-	entity_name?: string
-	file_date?: string
-	period_of_report?: string
-	form_type?: string
+interface EdgarSearchHitSource {
 	display_names?: string[]
+	file_date?: string
+	period_ending?: string
+	form?: string
 	file_description?: string
+	adsh?: string
+	ciks?: string[]
+}
+
+interface EdgarSearchHit {
+	_id: string
+	_source: EdgarSearchHitSource
 }
 
 interface EdgarSearchResponse {
@@ -260,13 +263,14 @@ async function executeSearch(
 		const data = (await res.json()) as EdgarSearchResponse
 		const hits = data.hits?.hits ?? []
 		for (const hit of hits.slice(0, 10)) {
-			const entityName = hit.entity_name ?? 'Unknown'
+			const src = hit._source
+			const entityName = src.display_names?.[0]?.replace(/\s*\(CIK \d+\)/, '') ?? 'Unknown'
 			// Avoid duplicates from ticker map
 			if (!results.some((r) => r.name === entityName)) {
 				results.push({
-					symbol: hit.file_num ?? '',
+					symbol: src.adsh ?? '',
 					name: entityName,
-					type: hit.form_type ?? 'filing',
+					type: src.form ?? 'filing',
 					source: 'sec-edgar',
 				})
 			}
@@ -400,13 +404,20 @@ async function executeInsiders(
 	if (!symbol) throw new Error('symbol is required for insiders/list')
 
 	const map = await loadTickerMap(rateLimits)
-	const { name: companyName } = lookupTicker(map, symbol)
+	const { cik } = lookupTicker(map, symbol)
+	const paddedCik = String(cik).padStart(10, '0')
 
-	// Search for Form 4 filings via EDGAR full-text search
+	// Search for Form 4 filings via EDGAR full-text search, filtered by company CIK
+	// Use date range to get recent filings (last 2 years)
+	const twoYearsAgo = new Date()
+	twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+	const startDate = twoYearsAgo.toISOString().split('T')[0]
+
 	const params = new URLSearchParams({
-		q: '',
+		q: `"${paddedCik}"`,
 		forms: '4',
-		entityName: companyName,
+		dateRange: 'custom',
+		startdt: startDate,
 	})
 
 	const url = `${SEARCH_BASE}/LATEST/search-index?${params}`
@@ -419,19 +430,34 @@ async function executeInsiders(
 		const data = (await res.json()) as EdgarSearchResponse
 		const hits = data.hits?.hits ?? []
 
-		for (const hit of hits.slice(0, insiderLimit)) {
-			const filerName = hit.display_names?.[0] ?? hit.entity_name ?? 'Unknown Filer'
+		for (const hit of hits) {
+			const src = hit._source
+			// Verify this filing is for the correct company by checking CIKs
+			if (src.ciks && !src.ciks.some((c) => c.replace(/^0+/, '') === String(cik))) {
+				continue
+			}
+			// display_names: [0] = insider/filer, [1] = company
+			// Skip if the first entry is the company itself (company-filed Form 4)
+			const filerRaw = src.display_names?.[0] ?? ''
+			const filerName = filerRaw.replace(/\s*\(CIK \d+\)/, '').trim()
+			if (!filerName || filerName.toLowerCase().includes(symbol.toLowerCase())) continue
+
 			transactions.push({
 				name: filerName,
-				transactionDate: hit.file_date ?? 'unknown',
-				transactionType: 'Form 4',
+				transactionDate: src.file_date ?? 'unknown',
+				transactionType: src.form ?? 'Form 4',
 				shares: 0,
-				description: hit.file_description,
-				accessionNumber: hit._id,
+				description: src.file_description,
+				accessionNumber: src.adsh ?? hit._id,
 				source: 'sec-edgar',
 			})
 		}
+
+		// Sort by filing date descending (search returns relevance order)
+		transactions.sort((a, b) => b.transactionDate.localeCompare(a.transactionDate))
 	}
+
+	return { data: transactions.slice(0, insiderLimit), source: 'sec-edgar', cached: false }
 
 	return { data: transactions, source: 'sec-edgar', cached: false }
 }

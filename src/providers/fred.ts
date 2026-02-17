@@ -84,12 +84,15 @@ async function getSeriesObservations(
 	const end = args.end as string | undefined
 	const limit = args.limit as number | undefined
 
+	// When limit is specified, fetch in descending order so we get the most recent observations
+	const useDesc = limit != null && !start
 	const [obsData, metaData] = await Promise.all([
 		fredFetch<{ observations: FredObservation[] }>('/series/observations', {
 			series_id: seriesId,
 			observation_start: start,
 			observation_end: end,
-			limit,
+			limit: useDesc ? limit : undefined,
+			sort_order: useDesc ? 'desc' : undefined,
 		}),
 		fredFetch<{ seriess: FredSeriesInfo[] }>('/series', {
 			series_id: seriesId,
@@ -97,13 +100,23 @@ async function getSeriesObservations(
 	])
 
 	const meta = metaData.seriess[0]
-	const dataPoints: MacroDataPoint[] = obsData.observations
+	let dataPoints: MacroDataPoint[] = obsData.observations
 		.filter((obs) => obs.value !== '.')
 		.map((obs) => ({
 			date: obs.date,
 			value: Number(obs.value),
 		}))
 		.filter((dp) => !Number.isNaN(dp.value))
+
+	// Reverse back to chronological order if we fetched descending
+	if (useDesc) {
+		dataPoints = dataPoints.reverse()
+	}
+
+	// Apply limit for non-desc cases (e.g., when start date is also specified)
+	if (limit != null && !useDesc) {
+		dataPoints = dataPoints.slice(-limit)
+	}
 
 	const series: MacroSeries = {
 		id: meta?.id ?? seriesId,

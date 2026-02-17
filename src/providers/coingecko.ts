@@ -157,18 +157,59 @@ async function getTop(limit = 10): Promise<ProviderResult<CryptoQuote[]>> {
 
 type OhlcEntry = [number, number, number, number, number]
 
-async function getHistory(symbol: string, days = 30): Promise<ProviderResult<CryptoCandle[]>> {
-	const id = await resolveCoinId(symbol)
-	const data = await request<OhlcEntry[]>(`/coins/${id}/ohlc?vs_currency=usd&days=${days}`)
+interface MarketChartResponse {
+	prices: [number, number][]
+	total_volumes: [number, number][]
+}
 
-	const candles: CryptoCandle[] = data.map((entry) => ({
-		time: new Date(entry[0]).toISOString(),
-		open: entry[1],
-		high: entry[2],
-		low: entry[3],
-		close: entry[4],
-		volume: 0, // CoinGecko OHLC endpoint does not provide volume
-	}))
+// CoinGecko OHLC endpoint only accepts specific day values
+const VALID_OHLC_DAYS = [1, 7, 14, 30, 90, 180, 365]
+
+function snapToValidDays(days: number): number | 'max' {
+	if (days > 365) return 'max'
+	// Find the smallest valid value >= requested days
+	for (const valid of VALID_OHLC_DAYS) {
+		if (valid >= days) return valid
+	}
+	return 365
+}
+
+async function getHistory(
+	symbol: string,
+	days = 30,
+	_interval?: string,
+): Promise<ProviderResult<CryptoCandle[]>> {
+	const id = await resolveCoinId(symbol)
+
+	// CoinGecko auto-selects granularity based on days:
+	// 1-2 days → 30min, 3-30 → 4h, 31-365 → daily, 365+ → weekly
+	// The --interval flag is only honored by Binance; CoinGecko uses days-based auto-interval.
+	const ohlcDays = snapToValidDays(days)
+	const [ohlcData, chartData] = await Promise.all([
+		request<OhlcEntry[]>(`/coins/${id}/ohlc?vs_currency=usd&days=${ohlcDays}`),
+		// Use same snapped days so volume data covers the full OHLC range
+		request<MarketChartResponse>(
+			`/coins/${id}/market_chart?vs_currency=usd&days=${ohlcDays}`,
+		),
+	])
+
+	// Build a volume lookup by timestamp (rounded to nearest hour)
+	const volumeMap = new Map<number, number>()
+	for (const [ts, vol] of chartData.total_volumes) {
+		volumeMap.set(Math.round(ts / 3600000), vol)
+	}
+
+	const candles: CryptoCandle[] = ohlcData.map((entry) => {
+		const tsHour = Math.round(entry[0] / 3600000)
+		return {
+			time: new Date(entry[0]).toISOString(),
+			open: entry[1],
+			high: entry[2],
+			low: entry[3],
+			close: entry[4],
+			volume: volumeMap.get(tsHour) ?? 0,
+		}
+	})
 
 	return { data: candles, source: 'coingecko', cached: false }
 }
@@ -277,6 +318,7 @@ export const coingecko: Provider = {
 				return (await getHistory(
 					args.symbol as string,
 					(args.days as number) ?? 30,
+					args.interval as string | undefined,
 				)) as ProviderResult<T>
 
 			case 'trending':

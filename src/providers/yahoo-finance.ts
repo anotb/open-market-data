@@ -328,22 +328,27 @@ export const yahoo: Provider = {
 					const raw = result as unknown as {
 						earnings?: {
 							earningsChart?: {
-								quarterly?: Array<{ date: string; actual?: { raw: number }; estimate?: { raw: number } }>
+								quarterly?: Array<{ date: string; actual?: number; estimate?: number }>
 							}
 						}
 						calendarEvents?: {
-							earnings?: { earningsDate?: Date[] }
+							earnings?: {
+								earningsDate?: Date[]
+								earningsAverage?: number
+								revenueAverage?: number
+							}
 						}
 					}
 
 					const quarterly = raw.earnings?.earningsChart?.quarterly ?? []
 					const nextDate = raw.calendarEvents?.earnings?.earningsDate?.[0]
+					const nextEstimate = raw.calendarEvents?.earnings?.earningsAverage
 
 					const data: EarningsData[] = quarterly.map((q) => ({
 						symbol,
 						earningsDate: q.date,
-						epsActual: q.actual?.raw,
-						epsEstimate: q.estimate?.raw,
+						epsActual: q.actual,
+						epsEstimate: q.estimate,
 						source: SOURCE,
 					}))
 
@@ -351,6 +356,7 @@ export const yahoo: Provider = {
 						data.unshift({
 							symbol,
 							earningsDate: toDateString(nextDate),
+							epsEstimate: nextEstimate,
 							source: SOURCE,
 						})
 					}
