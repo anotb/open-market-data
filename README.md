@@ -19,7 +19,10 @@ Source    : yahoo
 If you use Claude Code, GitHub Copilot, or any agent that supports skills — `omd` comes with a skill file that teaches the agent how to use it. Your agent can then answer questions like "what are Apple's latest financials?" or "how has Bitcoin performed this month?" by running `omd` commands.
 
 ```bash
-# Install the skill for Claude Code
+# If you installed globally, copy from the npm package
+cp -r "$(npm root -g)/open-market-data/skills/open-market-data" ~/.claude/skills/
+
+# Or if you cloned the repo
 cp -r skills/open-market-data ~/.claude/skills/
 
 # Or install with agentskills
@@ -30,9 +33,13 @@ The skill file is at `skills/open-market-data/SKILL.md`. It tells the agent what
 
 ## Install
 
+Requires Node.js 20 or later.
+
 ```bash
 npm install -g open-market-data
 ```
+
+No API keys are needed to get started. Stock quotes, financials, SEC filings, insider trades, and crypto prices all work immediately. Adding free API keys unlocks FRED economic data, CoinGecko rankings, Finnhub quotes, and Alpha Vantage as a fallback.
 
 ## What you can look up
 
@@ -128,7 +135,7 @@ You can force a specific source with `--source`:
 
 ```bash
 omd quote AAPL --source finnhub
-omd macro GDP --source worldbank
+omd macro NY.GDP.MKTP.CD --source worldbank
 ```
 
 ## More provider details
