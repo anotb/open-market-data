@@ -5,7 +5,7 @@ import type { DataCategory, Provider, ProviderResult } from './types.js'
 
 const SOURCE = 'yahoo'
 
-const yf = new YahooFinance()
+const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 
 // Yahoo Finance search quote shape (simplified from the full union)
 interface YFSearchQuote {
@@ -80,7 +80,7 @@ function mapFinancials(
 		.filter((r) => r.periodType === periodType)
 		.map((r) => ({
 			period: period === 'annual' ? 'annual' : 'quarterly',
-			date: r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date),
+			date: toDateString(r.date),
 			revenue: toNum(r.totalRevenue),
 			grossProfit: toNum(r.grossProfit),
 			operatingIncome: toNum(r.operatingIncome),
@@ -95,6 +95,14 @@ function mapFinancials(
 			sharesOutstanding: toNum(r.ordinarySharesNumber),
 			source: SOURCE,
 		}))
+		.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+function toDateString(v: unknown): string {
+	if (v instanceof Date) return v.toISOString().split('T')[0]
+	if (typeof v === 'number') return new Date(v * 1000).toISOString().split('T')[0]
+	if (typeof v === 'string' && v.includes('T')) return v.split('T')[0]
+	return String(v)
 }
 
 function toNum(v: unknown): number | undefined {
@@ -190,11 +198,15 @@ export const yahoo: Provider = {
 					const fiveYearsAgo = new Date()
 					fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5)
 
-					const results = await yf.fundamentalsTimeSeries(symbol, {
-						period1: fiveYearsAgo,
-						type: tsType,
-						module: 'all',
-					})
+					const results = await yf.fundamentalsTimeSeries(
+						symbol,
+						{
+							period1: fiveYearsAgo,
+							type: tsType,
+							module: 'all',
+						},
+						{ validateResult: false },
+					)
 
 					const data = mapFinancials(results as unknown as YFFundamentalsResult[], period)
 					return { data: data as T, source: SOURCE, cached: false }

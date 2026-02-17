@@ -40,7 +40,7 @@ async function fetchWithAgent(url: string, rateLimits: RateLimitConfig): Promise
 async function loadTickerMap(rateLimits: RateLimitConfig): Promise<Map<string, TickerEntry>> {
 	if (tickerMap) return tickerMap
 
-	const res = await fetchWithAgent(`${DATA_BASE}/files/company_tickers.json`, rateLimits)
+	const res = await fetchWithAgent('https://www.sec.gov/files/company_tickers.json', rateLimits)
 	if (!res.ok) {
 		throw new Error(`Failed to load company tickers: ${res.status} ${res.statusText}`)
 	}
