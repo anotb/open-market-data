@@ -34,8 +34,7 @@ export function formatTable(
 	const headerLine = `| ${headers.map((h, i) => h.padEnd(colWidths[i])).join(' | ')} |`
 	const separator = `| ${colWidths.map((w) => '-'.repeat(w)).join(' | ')} |`
 	const dataLines = rows.map(
-		(row) =>
-			`| ${row.map((v, i) => String(v ?? '').padEnd(colWidths[i])).join(' | ')} |`,
+		(row) => `| ${row.map((v, i) => String(v ?? '').padEnd(colWidths[i])).join(' | ')} |`,
 	)
 
 	return [headerLine, separator, ...dataLines].join('\n')
