@@ -34,6 +34,8 @@ loadEnvFile()
 export interface OmdConfig {
 	fredApiKey?: string
 	coingeckoApiKey?: string
+	finnhubApiKey?: string
+	alphaVantageApiKey?: string
 	edgarUserAgent?: string
 	defaultFormat?: 'markdown' | 'json' | 'plain'
 	disabledSources?: string[]
@@ -51,6 +53,8 @@ export function loadConfig(): OmdConfig {
 	const fromEnv: OmdConfig = {
 		fredApiKey: process.env.FRED_API_KEY,
 		coingeckoApiKey: process.env.COINGECKO_API_KEY,
+		finnhubApiKey: process.env.FINNHUB_API_KEY,
+		alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
 		edgarUserAgent: process.env.EDGAR_USER_AGENT,
 	}
 
@@ -69,6 +73,8 @@ export function loadConfig(): OmdConfig {
 		// Env vars override file
 		...(fromEnv.fredApiKey && { fredApiKey: fromEnv.fredApiKey }),
 		...(fromEnv.coingeckoApiKey && { coingeckoApiKey: fromEnv.coingeckoApiKey }),
+		...(fromEnv.finnhubApiKey && { finnhubApiKey: fromEnv.finnhubApiKey }),
+		...(fromEnv.alphaVantageApiKey && { alphaVantageApiKey: fromEnv.alphaVantageApiKey }),
 		...(fromEnv.edgarUserAgent && { edgarUserAgent: fromEnv.edgarUserAgent }),
 	}
 

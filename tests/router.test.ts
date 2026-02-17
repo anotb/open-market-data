@@ -10,13 +10,16 @@ beforeAll(() => {
 describe('router', () => {
 	it('has registered providers', () => {
 		const providers = getProviders()
-		expect(providers.length).toBe(5)
+		expect(providers.length).toBe(8)
 		const names = providers.map((p) => p.name)
 		expect(names).toContain('sec-edgar')
 		expect(names).toContain('yahoo')
 		expect(names).toContain('binance')
 		expect(names).toContain('coingecko')
 		expect(names).toContain('fred')
+		expect(names).toContain('finnhub')
+		expect(names).toContain('alphavantage')
+		expect(names).toContain('worldbank')
 	})
 
 	it('finds providers for quote category', () => {

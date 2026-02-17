@@ -16,6 +16,8 @@ export function registerConfigCommand(program: Command): void {
 						...cfg,
 						fredApiKey: cfg.fredApiKey ? '***configured***' : undefined,
 						coingeckoApiKey: cfg.coingeckoApiKey ? '***configured***' : undefined,
+						finnhubApiKey: cfg.finnhubApiKey ? '***configured***' : undefined,
+						alphaVantageApiKey: cfg.alphaVantageApiKey ? '***configured***' : undefined,
 					},
 					null,
 					2,
@@ -27,7 +29,7 @@ export function registerConfigCommand(program: Command): void {
 		.command('set <key> <value>')
 		.description('Set a configuration value')
 		.action((key: string, value: string) => {
-			const validKeys = ['fredApiKey', 'coingeckoApiKey', 'edgarUserAgent', 'defaultFormat']
+			const validKeys = ['fredApiKey', 'coingeckoApiKey', 'finnhubApiKey', 'alphaVantageApiKey', 'edgarUserAgent', 'defaultFormat']
 			if (!validKeys.includes(key)) {
 				console.error(`Invalid key: ${key}. Valid keys: ${validKeys.join(', ')}`)
 				process.exit(1)

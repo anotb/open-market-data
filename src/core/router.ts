@@ -78,9 +78,17 @@ export async function route<T = unknown>(
 		if (capable.length > 0) {
 			const reasons = capable.map((p) => {
 				if (!p.isEnabled()) {
-					return p.keyEnvVar
-						? `${p.name}: requires ${p.keyEnvVar} (run: omd config set ${p.keyEnvVar === 'COINGECKO_API_KEY' ? 'coingeckoApiKey' : p.keyEnvVar === 'FRED_API_KEY' ? 'fredApiKey' : p.keyEnvVar} <key>)`
-						: `${p.name}: disabled`
+					if (p.keyEnvVar) {
+						const configKeyMap: Record<string, string> = {
+							COINGECKO_API_KEY: 'coingeckoApiKey',
+							FRED_API_KEY: 'fredApiKey',
+							FINNHUB_API_KEY: 'finnhubApiKey',
+							ALPHA_VANTAGE_API_KEY: 'alphaVantageApiKey',
+						}
+						const configKey = configKeyMap[p.keyEnvVar] ?? p.keyEnvVar
+						return `${p.name}: requires ${p.keyEnvVar} (run: omd config set ${configKey} <key>)`
+					}
+					return `${p.name}: disabled`
 				}
 				if (disabledSet.has(p.name)) return `${p.name}: disabled in config`
 				return `${p.name}: unknown`

@@ -12,7 +12,9 @@ export function registerSourcesCommand(program: Command): void {
 			const providers = getProviders()
 
 			const rows = providers.map((p) => {
-				const rateStr = `${p.rateLimits.maxRequests}/${p.rateLimits.windowMs < 2000 ? 'sec' : 'min'}`
+				const windowMs = p.rateLimits.windowMs
+				const unit = windowMs < 2000 ? 'sec' : windowMs < 120_000 ? 'min' : 'day'
+				const rateStr = `${p.rateLimits.maxRequests}/${unit}`
 				return [
 					p.name,
 					p.isEnabled() ? 'enabled' : 'disabled',
