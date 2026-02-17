@@ -22,14 +22,14 @@ $ omd quote AAPL
 If you use Claude Code, GitHub Copilot, or any agent that supports skills — `omd` comes with a skill file that teaches the agent how to use it. Your agent can then answer questions like "what are Apple's latest financials?" or "how has Bitcoin performed this month?" by running `omd` commands.
 
 ```bash
-# If you installed globally, copy from the npm package
+# Install from ClawHub
+clawhub install open-market-data
+
+# Or copy from the npm package (if installed globally)
 cp -r "$(npm root -g)/open-market-data/skills/open-market-data" ~/.claude/skills/
 
 # Or if you cloned the repo
 cp -r skills/open-market-data ~/.claude/skills/
-
-# Or install with agentskills
-npx agentskills install open-market-data
 ```
 
 The skill file is at `skills/open-market-data/SKILL.md`. It tells the agent what commands are available, when to use `--json` for structured output, and how to pick the right command for a given question.
