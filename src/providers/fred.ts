@@ -103,6 +103,7 @@ async function getSeriesObservations(
 			date: obs.date,
 			value: Number(obs.value),
 		}))
+		.filter((dp) => !Number.isNaN(dp.value))
 
 	const series: MacroSeries = {
 		id: meta?.id ?? seriesId,
@@ -167,21 +168,9 @@ async function getCategories(
 async function searchForSearchCategory(
 	args: Record<string, unknown>,
 ): Promise<ProviderResult<SearchResult[]>> {
-	const query = args.query as string
-	if (!query) {
-		throw new Error('query is required')
-	}
-
-	const limit = (args.limit as number | undefined) ?? 20
-
-	const data = await fredFetch<{ seriess: FredSeriesSearchResult[] }>('/series/search', {
-		search_text: query,
-		limit,
-		order_by: 'popularity',
-		sort_order: 'desc',
-	})
-
-	const results: SearchResult[] = data.seriess.map((s) => ({
+	// Reuse searchSeries and map to SearchResult format
+	const result = await searchSeries(args)
+	const results: SearchResult[] = result.data.map((s) => ({
 		symbol: s.id,
 		name: s.title,
 		type: 'macro-series',

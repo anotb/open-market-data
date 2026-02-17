@@ -1,7 +1,31 @@
 import type { Command } from 'commander'
 import { formatKeyValue, formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
-import type { GlobalOptions, MacroSeries, SearchResult } from '../types.js'
+import type { GlobalOptions, MacroSeries, OutputFormat, SearchResult } from '../types.js'
+
+function displaySeries(
+	series: MacroSeries,
+	source: string,
+	cached: boolean,
+	format: OutputFormat,
+): void {
+	console.log(
+		formatKeyValue(
+			{
+				Series: series.id,
+				Title: series.title,
+				Units: series.units,
+				Frequency: series.frequency,
+				'Seasonal Adj.': series.seasonalAdjustment,
+			},
+			format,
+		),
+	)
+	console.log()
+	const rows = series.data.map((d) => [d.date, d.value.toString()])
+	console.log(formatTable(['Date', 'Value'], rows, format))
+	console.log(`\nSource: ${source}${cached ? ' (cached)' : ''}`)
+}
 
 export function registerMacroCommand(program: Command): void {
 	const macro = program.command('macro').description('Macroeconomic data from FRED')
@@ -25,8 +49,8 @@ export function registerMacroCommand(program: Command): void {
 				},
 			)
 
-			const rows = result.data.map((r) => [r.symbol, r.name, r.type ?? '', r.exchange ?? ''])
-			console.log(formatTable(['Series ID', 'Title', 'Frequency', 'Units'], rows, opts.format))
+			const rows = result.data.map((r) => [r.symbol, r.name, r.type ?? '', r.source ?? ''])
+			console.log(formatTable(['Series ID', 'Title', 'Type', 'Source'], rows, opts.format))
 		})
 
 	macro
@@ -51,25 +75,7 @@ export function registerMacroCommand(program: Command): void {
 					noCache: opts.noCache,
 				},
 			)
-
-			const series = result.data
-			console.log(
-				formatKeyValue(
-					{
-						Series: series.id,
-						Title: series.title,
-						Units: series.units,
-						Frequency: series.frequency,
-						'Seasonal Adj.': series.seasonalAdjustment,
-					},
-					opts.format,
-				),
-			)
-			console.log()
-
-			const rows = series.data.map((d) => [d.date, d.value.toString()])
-			console.log(formatTable(['Date', 'Value'], rows, opts.format))
-			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			displaySeries(result.data, result.source, result.cached, opts.format)
 		})
 
 	// Allow bare `omd macro GDP` as shorthand for `omd macro get GDP`
@@ -91,21 +97,7 @@ export function registerMacroCommand(program: Command): void {
 						noCache: opts.noCache,
 					},
 				)
-				const series = result.data
-				console.log(
-					formatKeyValue(
-						{
-							Series: series.id,
-							Title: series.title,
-							Units: series.units,
-							Frequency: series.frequency,
-						},
-						opts.format,
-					),
-				)
-				console.log()
-				const rows = series.data.map((d) => [d.date, d.value.toString()])
-				console.log(formatTable(['Date', 'Value'], rows, opts.format))
+				displaySeries(result.data, result.source, result.cached, opts.format)
 			}
 		})
 		.argument('[seriesId]', 'FRED series ID (shorthand for `macro get`)')

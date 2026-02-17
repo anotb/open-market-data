@@ -51,20 +51,33 @@ export function registerQuoteCommand(program: Command): void {
 					),
 				)
 			} else {
-				// Multi-symbol: concurrent requests
-				const results = await Promise.all(
-					symbols.map((s) =>
-						route<QuoteResult>(
-							'quote',
-							'get',
-							{ symbol: s },
-							{
-								source: opts.source,
-								noCache: opts.noCache,
-							},
+				// Multi-symbol: try batch first, fall back to concurrent individual requests
+				let results: { data: QuoteResult; source: string; cached: boolean }[]
+				try {
+					const batchResult = await route<QuoteResult[]>(
+						'quote',
+						'get',
+						{ symbols },
+						{ source: opts.source, noCache: opts.noCache },
+					)
+					results = batchResult.data.map((q) => ({
+						data: q,
+						source: batchResult.source,
+						cached: batchResult.cached,
+					}))
+				} catch {
+					// Fall back to concurrent individual requests
+					results = await Promise.all(
+						symbols.map((s) =>
+							route<QuoteResult>(
+								'quote',
+								'get',
+								{ symbol: s },
+								{ source: opts.source, noCache: opts.noCache },
+							),
 						),
-					),
-				)
+					)
+				}
 
 				const rows = results.map((r) => {
 					const q = r.data

@@ -5,10 +5,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "bin": {
     "omd": "dist/cli.js"
   },
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",

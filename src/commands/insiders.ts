@@ -41,5 +41,6 @@ export function registerInsidersCommand(program: Command): void {
 				),
 			)
 			console.log(`\nSource: ${result.source}${result.cached ? ' (cached)' : ''}`)
+			console.log('Note: Share counts are not available from EDGAR search results.')
 		})
 }

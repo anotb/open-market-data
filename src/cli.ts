@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import { registerConfigCommand } from './commands/config.js'
 import { registerCryptoCommand } from './commands/crypto.js'
@@ -12,12 +15,15 @@ import { registerSourcesCommand } from './commands/sources.js'
 import { registerAllProviders } from './providers/registry.js'
 import type { OutputFormat } from './types.js'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+
 const program = new Command()
 
 program
 	.name('omd')
 	.description('Unified CLI for free financial data APIs')
-	.version('0.1.0')
+	.version(pkg.version)
 	.option('--json', 'output as JSON')
 	.option('--plain', 'output as tab-separated values')
 	.option('-v, --verbose', 'verbose output')

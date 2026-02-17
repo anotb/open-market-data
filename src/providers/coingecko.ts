@@ -96,12 +96,16 @@ async function getQuote(symbol: string): Promise<ProviderResult<CryptoQuote>> {
 		throw new Error(`CoinGecko: no price data for "${id}"`)
 	}
 
+	const changePercent = entry.usd_24h_change
+	// usd_24h_change is a percentage — compute absolute dollar change from price
+	const change24h = changePercent != null ? entry.usd * (changePercent / 100) : undefined
+
 	return {
 		data: {
 			symbol: symbol.toUpperCase(),
 			price: entry.usd,
-			change24h: entry.usd_24h_change,
-			changePercent24h: entry.usd_24h_change,
+			change24h,
+			changePercent24h: changePercent,
 			volume24h: entry.usd_24h_vol,
 			marketCap: entry.usd_market_cap,
 			source: 'coingecko',

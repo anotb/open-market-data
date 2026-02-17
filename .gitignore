@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 *.local
+*.tgz
 reference/
 .DS_Store
 .claude/

@@ -9,12 +9,23 @@ const rateLimits: RateLimitConfig = {
 	windowMs: 60_000,
 }
 
+// Cache geo-restriction status to avoid repeated failed requests
+let geoRestricted = false
+
 async function request<T>(path: string): Promise<T> {
+	if (geoRestricted) {
+		throw new Error('Binance is geo-restricted in your region (HTTP 451)')
+	}
+
 	if (!consumeToken('binance', rateLimits)) {
 		throw new Error('Binance rate limit exceeded')
 	}
 
 	const res = await fetch(`${BASE_URL}${path}`)
+	if (res.status === 451) {
+		geoRestricted = true
+		throw new Error('Binance is geo-restricted in your region (HTTP 451)')
+	}
 	if (!res.ok) {
 		const body = await res.text()
 		throw new Error(`Binance API error ${res.status}: ${body}`)
@@ -117,7 +128,7 @@ export const binance: Provider = {
 	rateLimits,
 
 	isEnabled(): boolean {
-		return true
+		return !geoRestricted
 	},
 
 	async execute<T = unknown>(

@@ -5,7 +5,8 @@ import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './
 
 const SEARCH_BASE = 'https://efts.sec.gov'
 const DATA_BASE = 'https://data.sec.gov'
-const DEFAULT_USER_AGENT = 'open-market-data/0.1.0 (contact@example.com)'
+const DEFAULT_USER_AGENT = 'open-market-data/0.1.0 (dev@open-market-data.dev)'
+let userAgentWarned = false
 
 // --- Ticker map cache ---
 
@@ -18,6 +19,12 @@ let tickerMap: Map<string, TickerEntry> | null = null
 
 function getUserAgent(): string {
 	const config = loadConfig()
+	if (!config.edgarUserAgent && !userAgentWarned) {
+		userAgentWarned = true
+		console.error(
+			'[sec-edgar] Warning: Using default User-Agent. Set EDGAR_USER_AGENT env var or run: omd config set edgarUserAgent "YourApp/1.0 (your@email.com)"',
+		)
+	}
 	return config.edgarUserAgent ?? DEFAULT_USER_AGENT
 }
 
@@ -375,7 +382,8 @@ async function executeFilingList(
 		})
 
 		if (latest && filings.length >= 1) break
-		if (filings.length >= 20) break
+		const maxResults = (args.limit as number | undefined) ?? 20
+		if (filings.length >= maxResults) break
 	}
 
 	return { data: filings, source: 'sec-edgar', cached: false }

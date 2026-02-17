@@ -6,6 +6,8 @@ import { canRequest } from './rate-limiter.js'
 const providers: Provider[] = []
 
 export function registerProvider(provider: Provider): void {
+	// Prevent duplicate registration
+	if (providers.some((p) => p.name === provider.name)) return
 	providers.push(provider)
 }
 

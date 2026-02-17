@@ -53,7 +53,7 @@ export function saveConfig(config: Partial<OmdConfig>): void {
 	if (!existsSync(CONFIG_DIR)) {
 		mkdirSync(CONFIG_DIR, { recursive: true })
 	}
-	writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2))
+	writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 })
 	cached = merged
 }
 
