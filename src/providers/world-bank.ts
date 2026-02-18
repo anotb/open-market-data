@@ -146,8 +146,15 @@ async function getIndicatorData(
 		params.date = `${currentYear - 20}:${currentYear}`
 	}
 
+	const country = (args.country as string | undefined) ?? 'US'
+	if (!/^[A-Za-z]{2,3}$/.test(country)) {
+		throw new Error(
+			`[worldbank] Invalid country code "${country}". Use ISO 3166-1 alpha-2 (e.g., US, GB, JP)`,
+		)
+	}
+
 	const [, entries] = await wbFetch<WbDataEntry>(
-		`/country/US/indicator/${encodeURIComponent(seriesId)}`,
+		`/country/${encodeURIComponent(country)}/indicator/${encodeURIComponent(seriesId)}`,
 		params,
 	)
 

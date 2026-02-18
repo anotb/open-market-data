@@ -91,10 +91,11 @@ export function registerMacroCommand(program: Command): void {
 		.option('-s, --start <date>', 'start date (YYYY-MM-DD)')
 		.option('-e, --end <date>', 'end date (YYYY-MM-DD)')
 		.option('-l, --limit <n>', 'number of observations')
+		.option('-c, --country <code>', 'ISO 3166-1 alpha-2 country code', 'US')
 		.action(
 			async (
 				seriesId: string | undefined,
-				cmdOpts: { start?: string; end?: string; limit?: string },
+				cmdOpts: { start?: string; end?: string; limit?: string; country?: string },
 			) => {
 				if (!seriesId) {
 					macro.help()
@@ -102,6 +103,11 @@ export function registerMacroCommand(program: Command): void {
 				}
 
 				const opts = program.opts<GlobalOptions>()
+				// Non-US country data only available from World Bank
+				const source =
+					cmdOpts.country && cmdOpts.country.toUpperCase() !== 'US'
+						? (opts.source ?? 'worldbank')
+						: opts.source
 				const result = await route<MacroSeries>(
 					'macro',
 					'get',
@@ -110,9 +116,10 @@ export function registerMacroCommand(program: Command): void {
 						start: cmdOpts.start,
 						end: cmdOpts.end,
 						limit: cmdOpts.limit ? Number.parseInt(cmdOpts.limit, 10) : undefined,
+						country: cmdOpts.country,
 					},
 					{
-						source: opts.source,
+						source,
 						noCache: opts.noCache,
 					},
 				)

@@ -1,4 +1,5 @@
 import type { Command } from 'commander'
+import { loadConfig } from '../core/config.js'
 import {
 	formatCurrency,
 	formatKeyValue,
@@ -7,6 +8,7 @@ import {
 	formatTable,
 } from '../core/formatter.js'
 import { route } from '../core/router.js'
+import type { ProviderResult } from '../providers/types.js'
 import type { CryptoCandle, CryptoQuote, GlobalOptions } from '../types.js'
 
 export function registerCryptoCommand(program: Command): void {
@@ -17,17 +19,33 @@ export function registerCryptoCommand(program: Command): void {
 		.description('Top cryptocurrencies by market cap')
 		.action(async (limit: string | undefined) => {
 			const opts = program.opts<GlobalOptions>()
-			const result = await route<CryptoQuote[]>(
-				'crypto',
-				'top',
-				{
-					limit: limit ? Number.parseInt(limit, 10) : 10,
-				},
-				{
-					source: opts.source,
-					noCache: opts.noCache,
-				},
-			)
+
+			let result: ProviderResult<CryptoQuote[]> | undefined
+			try {
+				result = await route<CryptoQuote[]>(
+					'crypto',
+					'top',
+					{
+						limit: limit ? Number.parseInt(limit, 10) : 10,
+					},
+					{
+						source: opts.source,
+						noCache: opts.noCache,
+					},
+				)
+			} catch (err) {
+				const config = loadConfig()
+				if (!config.coingeckoApiKey) {
+					console.error(
+						'Market rankings require CoinGecko. Run: omd config set coingeckoApiKey <key>',
+					)
+				} else {
+					const msg = err instanceof Error ? err.message : String(err)
+					console.error(`Failed to fetch market rankings: ${msg}`)
+				}
+				process.exitCode = 1
+				return
+			}
 
 			const rows = result.data.map((c) => [
 				c.marketCapRank?.toString() ?? '',
