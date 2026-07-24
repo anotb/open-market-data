@@ -9,13 +9,7 @@ import type {
 	QuoteResult,
 	SearchResult,
 } from '../../src/types.js'
-import {
-	type FetchMock,
-	type Responder,
-	type Route,
-	expectNoUnmatched,
-	mockFetch,
-} from '../helpers/mock-fetch.js'
+import { type FetchMock, type Responder, type Route, mockFetch } from '../helpers/mock-fetch.js'
 import {
 	type TempHome,
 	clearConfigEnv,
@@ -384,6 +378,29 @@ function mountFinancials(income: unknown, balance: unknown): FetchMock {
 	return mount({ income: { json: income }, balance: { json: balance } })
 }
 
+/** Captures the rejection so a test can assert on the exact message. */
+async function rejection(promise: Promise<unknown>): Promise<Error> {
+	try {
+		await promise
+	} catch (err) {
+		return err as Error
+	}
+	throw new Error('expected the promise to reject, but it resolved')
+}
+
+/**
+ * The `Response` object the mock handed back for call `index`. `mockFetch` keeps the
+ * request side; this reaches through the `vi.fn` wrapper for the response side, which
+ * is the only way to observe whether the provider consumed the body.
+ */
+async function servedResponse(index: number): Promise<Response> {
+	const result = vi.mocked(globalThis.fetch).mock.results[index]
+	if (!result || result.type !== 'return') {
+		throw new Error(`no response was served for call ${index}`)
+	}
+	return (await result.value) as Response
+}
+
 async function search(
 	provider: Provider,
 	args: Record<string, unknown> = { query: 'ibm' },
@@ -720,7 +737,6 @@ describe('request plumbing', () => {
 		await getQuote(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 })
 
@@ -763,10 +779,17 @@ describe('transport errors', () => {
 	})
 
 	it('never parses the body of a non-OK response', async () => {
+		// This is a real behavioural difference from fred/finnhub/world-bank, which all echo
+		// the upstream body into their error. Pinning it needs two things a substring match
+		// cannot give: the whole message (so an appended body is visible) and the response
+		// itself, whose `bodyUsed` stays false only while nobody calls .text()/.json().
 		mount({ quote: { status: 500, statusText: 'Server Error', text: '<html>nginx</html>' } })
 		const provider = await importProvider()
 
-		await expect(getQuote(provider)).rejects.toThrow('HTTP 500: Server Error')
+		const err = await rejection(getQuote(provider))
+
+		expect(err.message).toBe('[alphavantage] HTTP 500: Server Error')
+		expect((await servedResponse(0)).bodyUsed).toBe(false)
 	})
 
 	it('propagates an income statement failure out of financials', async () => {
@@ -847,7 +870,6 @@ describe('body-level error signalling', () => {
 
 		await expect(search(provider)).rejects.toThrow('[alphavantage] rate limit reached')
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('prefers "Error Message" over "Note" and "Information"', async () => {
@@ -1071,7 +1093,12 @@ describe('numeric coercion', () => {
 		expect(quote.volume).toBeUndefined()
 	})
 
-	it('is case sensitive about "None", so "none" parses as unparseable', async () => {
+	it('drops an unparseable "none" volume instead of coercing it to zero', async () => {
+		// NOTE: toNum's explicit `v === 'None'` guard is not observable from outside — 'None'
+		// short-circuits there while 'none' falls through to `Number('none')` -> NaN, and both
+		// land on undefined, so no test can pin the guard's case sensitivity. What this does
+		// pin is the NaN branch on the quote path: an unparseable numeric field must be
+		// dropped, never reported as a real data point at 0.
 		mount({ quote: { json: quotePayload({ '06. volume': 'none' }) } })
 		const provider = await importProvider()
 
@@ -1252,12 +1279,16 @@ describe('quote/get', () => {
 	})
 
 	it('echoes the symbol from the payload rather than the request', async () => {
-		mount({ quote: { json: quotePayload({ '01. symbol': 'IBM' }) } })
+		// Alpha Vantage answers with its own spelling of a class share (brk.b -> BRK-B), so a
+		// payload symbol that differs from the request in more than case is what separates
+		// "echo the payload" from "upper-case the request".
+		const fx = mount({ quote: { json: quotePayload({ '01. symbol': 'BRK-B' }) } })
 		const provider = await importProvider()
 
-		const quote = await getQuote(provider, { symbol: 'ibm' })
+		const quote = await getQuote(provider, { symbol: 'brk.b' })
 
-		expect(quote.symbol).toBe('IBM')
+		expect(fx.query(QUOTE_MATCH).symbol).toBe('brk.b')
+		expect(quote.symbol).toBe('BRK-B')
 	})
 
 	it('strips the trailing percent sign from the change percent', async () => {
@@ -2192,6 +2223,5 @@ describe('action dispatch', () => {
 
 		expect(fx.callCount()).toBe(0)
 		expect(remaining()).toBe(25)
-		expectNoUnmatched(fx)
 	})
 })

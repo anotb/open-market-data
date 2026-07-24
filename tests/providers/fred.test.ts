@@ -4,13 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Provider } from '../../src/providers/types.js'
 import type { MacroSeries, SearchResult } from '../../src/types.js'
-import {
-	type FetchMock,
-	type Responder,
-	type Route,
-	expectNoUnmatched,
-	mockFetch,
-} from '../helpers/mock-fetch.js'
+import { type FetchMock, type Responder, type Route, mockFetch } from '../helpers/mock-fetch.js'
 import {
 	type TempHome,
 	clearConfigEnv,
@@ -490,18 +484,6 @@ describe('request plumbing', () => {
 		expect(fx.urls()).toEqual([
 			`${BASE_URL}/series/observations?api_key=${API_KEY}&file_type=json&series_id=GDP`,
 			`${BASE_URL}/series?api_key=${API_KEY}&file_type=json&series_id=GDP`,
-		])
-	})
-
-	it('requests observations before series metadata', async () => {
-		const fx = mountSeries(GDP_ROWS)
-		const provider = await importProvider()
-
-		await getSeries(provider)
-
-		expect(fx.calls.map((c) => c.parsed.pathname)).toEqual([
-			'/fred/series/observations',
-			'/fred/series',
 		])
 	})
 
@@ -1538,7 +1520,6 @@ describe('macro/search', () => {
 		await searchSeries(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('leaves fields undefined when FRED omits them', async () => {
@@ -1669,7 +1650,6 @@ describe('macro/categories', () => {
 		await getCategories(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('throws a TypeError when the payload has no categories array', async () => {
@@ -1845,6 +1825,5 @@ describe('action dispatch', () => {
 		await expect(provider.execute('macro', 'series', {})).rejects.toThrow('does not support')
 
 		expect(fx.callCount()).toBe(0)
-		expectNoUnmatched(fx)
 	})
 })

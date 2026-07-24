@@ -460,14 +460,27 @@ describe('global output flags', { timeout: SPAWN_TIMEOUT }, () => {
 		expect(result.stdout.trimStart().startsWith('| Source')).toBe(true)
 	})
 
-	it('accepts --no-cache and --verbose without changing the exit code', async () => {
-		// NOTE: suspected bug — commander parses `--no-cache` into `opts.cache`,
-		// but every command reads `opts.noCache`, which is therefore always
-		// undefined. The flag parses fine but can never bypass the cache.
-		const result = await runCli(['--no-cache', '--verbose', 'sources'])
+	it('accepts --no-cache and --verbose, and neither changes a byte of the output', async () => {
+		// NOTE: two confirmed bugs, neither of which is observable from outside the
+		// process, so this test pins the part that is: both flags parse and are
+		// inert.
+		//   1. `.option('--no-cache', ...)` (src/cli.ts:35) makes commander store the
+		//      negated flag as `opts.cache` — true by default, false when given —
+		//      while every command builds its RouteOptions from `opts.noCache`
+		//      (e.g. src/commands/search.ts:18), which is never populated. `route()`
+		//      therefore always takes its cache path; the flag cannot bypass it.
+		//      A cache hit cannot be shown here: the cache is in-process and only a
+		//      successful (networked) route ever fills it.
+		//   2. `--verbose` is parsed but no command forwards it into the provider
+		//      args, so the `args.verbose` branches in yahoo-finance.ts are dead from
+		//      the CLI and the flag prints nothing extra.
+		const plain = await runCli(['sources'])
+		const flagged = await runCli(['--no-cache', '--verbose', 'sources'])
 
-		expect(result.code).toBe(0)
-		expect(parseMarkdownTable(result.stdout)).toHaveLength(PROVIDER_NAMES.length)
+		expect(flagged.code).toBe(0)
+		expect(flagged.stderr).toBe('')
+		expect(flagged.stdout).toBe(plain.stdout)
+		expect(parseMarkdownTable(flagged.stdout)).toHaveLength(PROVIDER_NAMES.length)
 	})
 })
 

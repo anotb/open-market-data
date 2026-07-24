@@ -6,7 +6,11 @@ import {
 	mockFetchNetworkError,
 } from '../helpers/mock-fetch.js'
 import { clearConfigEnv, makeTempHome } from '../helpers/modules.js'
-import { createFailingProvider, createMockProvider, createRecordingProvider } from '../helpers/providers.js'
+import {
+	createFailingProvider,
+	createMockProvider,
+	createRecordingProvider,
+} from '../helpers/providers.js'
 
 /**
  * The test harness is load-bearing for every provider suite, so it gets its own

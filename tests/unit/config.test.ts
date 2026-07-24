@@ -119,6 +119,13 @@ describe('getConfigPath', () => {
 
 	it('is the exact file loadConfig reads and saveConfig writes', async () => {
 		const config = await importConfig()
+
+		// The read half: a value planted at getConfigPath() comes back out of loadConfig().
+		mkdirSync(join(home.dir, '.omd'), { recursive: true })
+		writeFileSync(config.getConfigPath(), JSON.stringify({ fredApiKey: 'planted-key' }))
+		expect(config.loadConfig().fredApiKey).toBe('planted-key')
+
+		// The write half: saveConfig lands on that same path.
 		config.saveConfig({ fredApiKey: 'roundtrip-key' })
 
 		expect(existsSync(config.getConfigPath())).toBe(true)
@@ -128,14 +135,17 @@ describe('getConfigPath', () => {
 	})
 
 	it('does not depend on the current working directory', async () => {
-		const config = await importConfig()
-		const before = config.getConfigPath()
+		const fromTempCwd = await importConfig()
 
 		const nested = join(cwdDir, 'nested')
 		mkdirSync(nested)
 		process.chdir(nested)
+		// A second generation resolves the path from scratch under a different cwd.
+		// Anchoring CONFIG_DIR on process.cwd() instead of homedir() would move it.
+		const fromNestedCwd = await importConfig()
 
-		expect(config.getConfigPath()).toBe(before)
+		expect(fromNestedCwd.getConfigPath()).toBe(fromTempCwd.getConfigPath())
+		expect(fromNestedCwd.getConfigPath()).toBe(join(home.dir, '.omd', 'config.json'))
 	})
 
 	it('follows $HOME as it was at import time, not as it is later', async () => {
@@ -848,11 +858,15 @@ describe('.env loader', () => {
 		expect(process.env['export OMD_TEST_EXPORTED']).toBe('exported')
 	})
 
-	it('ignores a line that begins with an equals sign and keeps parsing', async () => {
+	it('keeps parsing after a line that begins with an equals sign', async () => {
+		// NOTE: the loader does not actually skip `=orphan` — it derives an empty key
+		// and runs `process.env[''] = 'orphan'`, which Node itself discards. What the
+		// product controls is that the loader neither aborts on the line nor invents a
+		// name to file the orphaned value under.
 		writeEnvFile('=orphan\nOMD_TEST_AFTER_ORPHAN=ok\n')
 		await importConfig()
 
-		expect(process.env['']).toBeUndefined()
+		expect(Object.keys(process.env).filter((key) => process.env[key] === 'orphan')).toEqual([])
 		expect(process.env.OMD_TEST_AFTER_ORPHAN).toBe('ok')
 	})
 
@@ -893,14 +907,18 @@ describe('.env loader', () => {
 	})
 
 	it('reads .env from the current working directory, not the package root', async () => {
-		writeEnvFile('OMD_TEST_CWD_ONLY=loaded\n')
+		// Two .env files: one in the ancestor directory, one in the cwd. Only the
+		// cwd's may be read, and the loader must not walk up to find the other.
+		writeEnvFile('OMD_TEST_ANCESTOR_ONLY=ancestor\n')
 		const nested = join(cwdDir, 'nested')
 		mkdirSync(nested)
+		writeFileSync(join(nested, '.env'), 'OMD_TEST_CWD_ONLY=loaded\n')
 		process.chdir(nested)
 
 		await importConfig()
 
-		expect(process.env.OMD_TEST_CWD_ONLY).toBeUndefined()
+		expect(process.env.OMD_TEST_CWD_ONLY).toBe('loaded')
+		expect(process.env.OMD_TEST_ANCESTOR_ONLY).toBeUndefined()
 	})
 })
 

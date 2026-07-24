@@ -1,8 +1,15 @@
-import { describe, it, expect } from 'vitest'
-import { yahoo } from '../../src/providers/yahoo-finance.js'
-import { secEdgar } from '../../src/providers/sec-edgar.js'
+import { describe, expect, it } from 'vitest'
 import { binance } from '../../src/providers/binance.js'
-import type { QuoteResult, SearchResult, FinancialStatement, Filing, CryptoQuote, CryptoCandle } from '../../src/types.js'
+import { secEdgar } from '../../src/providers/sec-edgar.js'
+import { yahoo } from '../../src/providers/yahoo-finance.js'
+import type {
+	CryptoCandle,
+	CryptoQuote,
+	Filing,
+	FinancialStatement,
+	QuoteResult,
+	SearchResult,
+} from '../../src/types.js'
 
 describe('yahoo provider (real API)', () => {
 	it('is enabled without key', () => {

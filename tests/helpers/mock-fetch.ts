@@ -41,7 +41,9 @@ export interface RequestContext {
 
 export type Matcher = string | RegExp | ((url: string) => boolean)
 
-export type Responder = ResponseSpec | ((ctx: RequestContext) => ResponseSpec | Promise<ResponseSpec>)
+export type Responder =
+	| ResponseSpec
+	| ((ctx: RequestContext) => ResponseSpec | Promise<ResponseSpec>)
 
 export interface Route {
 	match: Matcher

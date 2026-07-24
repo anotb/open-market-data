@@ -794,9 +794,13 @@ describe('crypto/quote', () => {
 
 		const quote = await getQuote(provider)
 
+		// `toBeUndefined` is what rules NaN out: an unguarded `price * (pct / 100)`
+		// would land here as NaN, which is not undefined.
 		expect(quote.change24h).toBeUndefined()
 		expect(quote.changePercent24h).toBeUndefined()
-		expect(Number.isNaN(quote.change24h as unknown as number)).toBe(false)
+		// The rest of the quote is still mapped, so the guard is scoped to change24h.
+		expect(quote.price).toBe(50000)
+		expect(quote.volume24h).toBe(1)
 	})
 
 	it('treats a null percent as absent', async () => {

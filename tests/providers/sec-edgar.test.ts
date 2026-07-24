@@ -389,10 +389,22 @@ describe('ticker map', () => {
 	})
 
 	it('propagates a malformed ticker payload instead of caching it', async () => {
-		mount({ tickers: { text: 'not json at all' } })
+		const fx = mockFetch([
+			{ match: TICKER_MATCH, respond: { text: 'not json at all' }, times: 1 },
+			{ match: TICKER_MATCH, respond: { json: COMPANY_TICKERS } },
+			{ match: FACTS_MATCH, respond: { json: FULL_FACTS } },
+		])
 		const provider = await importProvider()
 
 		await expect(getFinancials(provider)).rejects.toThrow(SyntaxError)
+
+		// The failed parse must leave the module-scope cache untouched: a second
+		// call re-downloads company_tickers.json and succeeds on the good payload.
+		const statements = await getFinancials(provider)
+
+		expect(statements).toHaveLength(1)
+		expect(fx.callCount(TICKER_MATCH)).toBe(2)
+		expectNoUnmatched(fx)
 	})
 
 	it('does not de-duplicate concurrent loads of the ticker map', async () => {
@@ -420,16 +432,19 @@ describe('user agent', () => {
 	})
 
 	it('warns exactly once even though a single call issues two requests', async () => {
-		mount({ facts: { json: FULL_FACTS } })
+		const fx = mount({ facts: { json: FULL_FACTS } })
 		const provider = await importProvider()
 
 		await getFinancials(provider)
 
+		// Both requests go out with the default agent, but only the first one warns.
+		expect(fx.callCount(TICKER_MATCH)).toBe(1)
+		expect(fx.callCount(FACTS_MATCH)).toBe(1)
 		expect(errorSpy).toHaveBeenCalledTimes(1)
-		expect(String(errorSpy.mock.calls[0][0])).toContain(
-			'[sec-edgar] Warning: Using default User-Agent',
+		expect(errorSpy.mock.calls[0]).toHaveLength(1)
+		expect(String(errorSpy.mock.calls[0][0])).toBe(
+			'[sec-edgar] Warning: Using default User-Agent. Set EDGAR_USER_AGENT env var or run: omd config set edgarUserAgent "YourApp/1.0 (your@email.com)"',
 		)
-		expect(String(errorSpy.mock.calls[0][0])).toContain('EDGAR_USER_AGENT')
 	})
 
 	it('never repeats the warning for later calls in the same process', async () => {
@@ -626,13 +641,18 @@ describe('financials/get', () => {
 		expect(statements.map((s) => s.period)).toEqual(['Q2-2024', 'Q1-2024'])
 	})
 
-	it('lets a later entry for the same period and tag win (restatement)', async () => {
+	it('lets the last array entry for a period and tag win (restatement)', async () => {
+		// NOTE: the product resolves a restatement by ARRAY POSITION, not by the
+		// `filed` date the code comment claims — so the fixture deliberately puts
+		// the two orders in conflict. The middle row carries the latest `filed`
+		// date; the winner is the last row regardless.
 		mount({
 			facts: {
 				json: companyFacts({
 					NetIncomeLoss: usd([
 						{ end: '2023-09-30', val: 96995000000, filed: '2023-11-03' },
-						{ end: '2023-09-30', val: 97100000000, filed: '2024-11-01' },
+						{ end: '2023-09-30', val: 97100000000, filed: '2025-02-01' },
+						{ end: '2023-09-30', val: 97050000000, filed: '2024-11-01' },
 					]),
 				}),
 			},
@@ -641,7 +661,9 @@ describe('financials/get', () => {
 
 		const statements = await getFinancials(provider)
 
-		expect(statements[0].netIncome).toBe(97100000000)
+		// 96995000000 would mean "first entry wins", 97100000000 "latest `filed`
+		// wins"; only array position yields the third row's value.
+		expect(statements[0].netIncome).toBe(97050000000)
 	})
 
 	it('resolves restatements by array order rather than filing date', async () => {

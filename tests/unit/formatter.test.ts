@@ -15,6 +15,9 @@ import type { OutputFormat } from '../../src/types.js'
 
 const lines = (...ls: string[]) => ls.join('\n')
 
+/** Splits a rendered markdown line back into its padded cells. */
+const mdCells = (line: string) => line.slice(2, -2).split(' | ')
+
 // `formatTable`/`formatKeyValue` fall through to markdown for anything that is
 // neither 'json' nor 'plain'; the double cast lets us reach that branch.
 const UNKNOWN_FORMAT = 'csv' as unknown as OutputFormat
@@ -62,16 +65,19 @@ describe('formatTable — markdown', () => {
 				'| MSFT   | Microsoft Corp |',
 			),
 		)
-		const widths = new Set(out.split('\n').map((line) => line.length))
-		expect(widths.size).toBe(1)
 	})
 
 	it('makes each separator run exactly as wide as its column', () => {
+		// 'Ticker' is wider than its data cell and '55.5' is wider than the 'P/E'
+		// header, so one table exercises both directions of the column-width max.
 		const out = formatTable(['Ticker', 'P/E'], [['NVDA', '55.5']], 'markdown')
-		const [, separator] = out.split('\n')
+		const [header, separator, row] = out.split('\n')
 
 		expect(separator).toBe('| ------ | ---- |')
-		expect(separator.split(' | ').map((s) => s.replace(/[|\s]/g, '').length)).toEqual([6, 4])
+		// Only the separator is pinned above, so measuring the header and data cells
+		// against it catches a padding regression that leaves the separator intact.
+		expect(mdCells(header)).toEqual(['Ticker', 'P/E '])
+		expect(mdCells(row)).toEqual(['NVDA  ', '55.5'])
 	})
 
 	it('emits only the header and separator when there are no rows', () => {
@@ -537,8 +543,11 @@ describe('formatCurrency', () => {
 	})
 
 	it('rounds decimal halves up, unlike Number.prototype.toFixed', () => {
+		// 2.675 and 1.015 are both stored just below the half, so toFixed(2) renders
+		// them as '2.67' / '1.01'. Intl rounds the shortest decimal representation
+		// with halfExpand, so formatCurrency goes up where formatPercent would not.
 		expect(formatCurrency(2.675)).toBe('$2.68')
-		expect((2.675).toFixed(2)).toBe('2.67')
+		expect(formatCurrency(1.015)).toBe('$1.02')
 	})
 
 	it('carries rounding into the next grouping', () => {

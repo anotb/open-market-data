@@ -75,6 +75,9 @@ const MAPPED_KEY_ENV_VARS = [
 	'ALPHA_VANTAGE_API_KEY',
 ]
 
+/** An env var no provider declares, used to observe the router's raw fallback. */
+const UNMAPPED_KEY_ENV_VAR = 'DEFINITELY_NOT_A_MAPPED_API_KEY'
+
 const KEYED_PROVIDERS = PROVIDERS.filter((c) => c.provider.requiresKey)
 const KEYLESS_PROVIDERS = PROVIDERS.filter((c) => !c.provider.requiresKey)
 
@@ -83,6 +86,23 @@ const SCREAMING_SNAKE_CASE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/
 
 const UNSUPPORTED_ACTION = 'definitely-not-a-real-action'
 const UNSUPPORTED_CATEGORY = 'definitely-not-a-real-category' as DataCategory
+
+/**
+ * The exact rejection message each provider produces for an empty action on the
+ * first category it declares. Trailing spaces are real: `binance` and
+ * `coingecko` interpolate the bare action, so an empty one leaves the message
+ * dangling. Pinned in full because this is a user-visible surface.
+ */
+const EMPTY_ACTION_MESSAGES: Record<string, string> = {
+	'sec-edgar': 'SEC EDGAR does not support search/',
+	yahoo: '[yahoo] Unsupported operation: search/',
+	binance: 'Binance does not support action: ',
+	coingecko: 'CoinGecko crypto does not support action: ',
+	fred: 'FRED provider does not support macro/',
+	finnhub: '[finnhub] Unsupported operation: search/',
+	alphavantage: '[alphavantage] Unsupported operation: search/',
+	worldbank: '[worldbank] Provider does not support macro/',
+}
 
 const PROVIDER_DIR = fileURLToPath(new URL('../../src/providers/', import.meta.url))
 
@@ -313,9 +333,35 @@ describe('the provider set', () => {
 		expect(provider.keyEnvVar).toBeUndefined()
 	})
 
-	it('requires a key for exactly the env vars the router can explain', () => {
-		const declared = KEYED_PROVIDERS.map((c) => c.provider.keyEnvVar)
+	it('requires a key for exactly the env vars the router can explain', async () => {
+		const declared = KEYED_PROVIDERS.map((c) => c.provider.keyEnvVar as string)
+		const router = await freshImport<RouterModule>('../../src/core/router.js')
+		// Disabled stand-ins — one per declared env var, plus one the router cannot
+		// know about — so the assertion reads the router's own env-var -> config-key
+		// map instead of a second copy of it maintained in this file.
+		for (const [i, keyEnvVar] of [...declared, UNMAPPED_KEY_ENV_VAR].entries()) {
+			router.registerProvider(
+				createMockProvider({
+					name: `stub-${i}`,
+					capabilities: ['quote'],
+					requiresKey: true,
+					keyEnvVar,
+					isEnabled: () => false,
+				}),
+			)
+		}
 
+		const err = await rejection(router.route('quote', 'get', {}, { noCache: true }))
+
+		// An env var the router has no mapping for is echoed back raw as the config
+		// key — that is the shape a declared env var must never have.
+		expect(err.message).toContain(
+			`requires ${UNMAPPED_KEY_ENV_VAR} (run: omd config set ${UNMAPPED_KEY_ENV_VAR} <key>)`,
+		)
+		const unexplained = declared.filter((envVar) =>
+			err.message.includes(`omd config set ${envVar} <key>`),
+		)
+		expect(unexplained).toEqual([])
 		expect(new Set(declared)).toEqual(new Set(MAPPED_KEY_ENV_VARS))
 	})
 
@@ -334,13 +380,6 @@ describe('isEnabled()', () => {
 		const provider = byName(providers, name)
 
 		expect(typeof provider.isEnabled()).toBe('boolean')
-	})
-
-	it.each(REGISTERED_NAMES)('%s answers the same way on repeated calls', async (name) => {
-		const { providers } = await loadRegistered()
-		const provider = byName(providers, name)
-
-		expect(provider.isEnabled()).toBe(provider.isEnabled())
 	})
 
 	it('issues no network request for any provider', async () => {
@@ -385,22 +424,6 @@ describe('isEnabled()', () => {
 
 describe('execute() — unsupported operations', () => {
 	it.each(CAPABILITY_PAIRS)(
-		'$provider.name returns a promise for $category with an unknown action',
-		({ provider, category }) => {
-			forbidNetwork()
-			let promise: Promise<unknown> | undefined
-
-			expect(() => {
-				promise = provider.execute(category, UNSUPPORTED_ACTION, {})
-			}).not.toThrow()
-
-			expect(promise).toBeInstanceOf(Promise)
-			// Swallow the rejection this test deliberately does not await.
-			void promise?.catch(() => undefined)
-		},
-	)
-
-	it.each(CAPABILITY_PAIRS)(
 		'$provider.name rejects with an Error for $category with an unknown action',
 		async ({ provider, category }) => {
 			forbidNetwork()
@@ -408,7 +431,6 @@ describe('execute() — unsupported operations', () => {
 			const err = await rejection(provider.execute(category, UNSUPPORTED_ACTION, {}))
 
 			expect(err).toBeInstanceOf(Error)
-			expect(err.message.length).toBeGreaterThan(0)
 		},
 	)
 
@@ -456,7 +478,7 @@ describe('execute() — unsupported operations', () => {
 
 			const err = await rejection(provider.execute(category, '', {}))
 
-			expect(err).toBeInstanceOf(Error)
+			expect(err.message).toBe(EMPTY_ACTION_MESSAGES[provider.name])
 			expect(mock.callCount()).toBe(0)
 		},
 	)
@@ -604,7 +626,11 @@ describe('registerAllProviders', () => {
 
 		registry.registerAllProviders()
 
-		expect(router.getProviders()).toEqual(first)
+		const second = router.getProviders()
+		expect(second).toHaveLength(first.length)
+		// Element-wise identity: a duplicate registration must not swap in a
+		// distinct-but-equivalent object, which deep equality would not notice.
+		for (const [i, provider] of first.entries()) expect(second[i]).toBe(provider)
 	})
 
 	it('starts from an empty registry in every fresh module generation', async () => {

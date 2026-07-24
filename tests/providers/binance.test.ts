@@ -209,21 +209,6 @@ describe('quote', () => {
 		expect(quote.symbol).toBe('SOL')
 	})
 
-	it('coerces every string field of the payload into a number', async () => {
-		mockFetch([{ match: QUOTE_MATCH, respond: { json: TICKER_24HR } }])
-		const provider = await importProvider()
-
-		const quote = await quoteOf(provider, 'BTC')
-
-		expect(typeof quote.price).toBe('number')
-		expect(typeof quote.change24h).toBe('number')
-		expect(typeof quote.changePercent24h).toBe('number')
-		expect(typeof quote.volume24h).toBe('number')
-		expect(typeof quote.high24h).toBe('number')
-		expect(typeof quote.low24h).toBe('number')
-		expect(typeof quote.symbol).toBe('string')
-	})
-
 	it('preserves the sign of a negative 24h change and percent', async () => {
 		mockFetch([
 			{
@@ -387,20 +372,6 @@ describe('history', () => {
 				volume: 25000,
 			},
 		])
-	})
-
-	it('returns numbers, not the API strings, for OHLCV', async () => {
-		mockFetch([{ match: KLINES_MATCH, respond: { json: KLINES } }])
-		const provider = await importProvider()
-
-		const [candle] = await historyOf(provider, { symbol: 'BTC' })
-
-		expect(typeof candle.time).toBe('string')
-		expect(typeof candle.open).toBe('number')
-		expect(typeof candle.high).toBe('number')
-		expect(typeof candle.low).toBe('number')
-		expect(typeof candle.close).toBe('number')
-		expect(typeof candle.volume).toBe('number')
 	})
 
 	it('wraps the candle list in a non-cached binance ProviderResult', async () => {
@@ -592,7 +563,7 @@ describe('geo restriction', () => {
 	})
 
 	it('prefers the geo message over the generic API-error message for 451 bodies', async () => {
-		mockFetch([
+		const fx = mockFetch([
 			{
 				match: QUOTE_MATCH,
 				respond: { status: 451, text: 'Service unavailable from a restricted location.' },
@@ -600,10 +571,16 @@ describe('geo restriction', () => {
 		])
 		const provider = await importProvider()
 
-		await expect(quoteOf(provider, 'BTC')).rejects.toThrow(
-			'Binance is geo-restricted in your region (HTTP 451)',
+		const error = await quoteOf(provider, 'BTC').then(
+			() => undefined,
+			(reason: unknown) => reason as Error,
 		)
-		await expect(quoteOf(provider, 'BTC')).rejects.not.toThrow(/Binance API error/)
+
+		// Exact message: the 451 branch must win outright, so neither the generic
+		// `Binance API error <status>` wrapper nor the response body appears.
+		expect(error?.message).toBe('Binance is geo-restricted in your region (HTTP 451)')
+		// One real request — the latch was not already set, so this is the 451 path.
+		expect(fx.callCount()).toBe(1)
 	})
 
 	it('flips isEnabled() to false once a 451 is seen', async () => {

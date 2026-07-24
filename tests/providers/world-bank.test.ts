@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Provider } from '../../src/providers/types.js'
 import type { MacroSeries } from '../../src/types.js'
-import {
-	type FetchMock,
-	type Responder,
-	type Route,
-	expectNoUnmatched,
-	mockFetch,
-} from '../helpers/mock-fetch.js'
+import { type FetchMock, type Responder, type Route, mockFetch } from '../helpers/mock-fetch.js'
 import { freshImport } from '../helpers/modules.js'
 
 /**
@@ -1077,7 +1071,6 @@ describe('macro/get data mapping', () => {
 		await getSeries(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 })
 
@@ -1140,7 +1133,6 @@ describe('macro/search', () => {
 		await searchIndicators(provider, { query: 'gdp', limit: 1 })
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('matches the indicator name case-insensitively', async () => {

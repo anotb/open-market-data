@@ -19,5 +19,17 @@
       "quoteStyle": "single",
       "semicolons": "asNeeded"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["tests/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noDelete": "off"
+          }
+        }
+      }
+    }
+  ]
 }

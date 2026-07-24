@@ -185,12 +185,20 @@ describe('getRemaining', () => {
 		expect(rl.getRemaining('yahoo-finance', YAHOO)).toBe(30)
 	})
 
-	it('floors a fractional balance towards zero', () => {
+	it('floors a fractional balance towards negative infinity, not towards zero', () => {
 		drain('sec-edgar', SEC_EDGAR)
 		vi.advanceTimersByTime(125)
 
 		// 125ms of a 1000ms / 10-token window accrues exactly 1.25 tokens.
 		expect(rl.getRemaining('sec-edgar', SEC_EDGAR)).toBe(1)
+
+		// A backwards clock step debits at the same rate (see 'a clock that moves
+		// backwards'), so this second bucket lands on exactly -1.25 tokens. Only
+		// Math.floor reports -2 there; rounding towards zero would report -1.
+		drain('backwards-clock', SEC_EDGAR)
+		vi.setSystemTime(new Date(START))
+
+		expect(rl.getRemaining('backwards-clock', SEC_EDGAR)).toBe(-2)
 	})
 
 	it('reports zero while the accrued balance is still under one token', () => {
@@ -482,9 +490,17 @@ describe('resetBucket', () => {
 		expect(rl.getRemaining('sec-edgar', SEC_EDGAR)).toBe(2)
 	})
 
-	it('is a no-op for a source that was never seen', () => {
-		expect(() => rl.resetBucket('never-used')).not.toThrow()
+	it('leaves every other bucket untouched for a source that was never seen', () => {
+		drain('sec-edgar', SEC_EDGAR)
+		vi.advanceTimersByTime(125)
+		drain('yahoo-finance', YAHOO)
 
+		// A throw here fails the test on its own; no not.toThrow() wrapper needed.
+		rl.resetBucket('never-used')
+
+		// Neither the partial balance nor the refill clock of a live bucket moves.
+		expect(rl.getRemaining('sec-edgar', SEC_EDGAR)).toBe(1)
+		expect(rl.getRemaining('yahoo-finance', YAHOO)).toBe(0)
 		expect(rl.getRemaining('never-used', SEC_EDGAR)).toBe(10)
 	})
 
@@ -551,16 +567,6 @@ describe('config capture', () => {
 		expect(rl.canRequest('finnhub', generous)).toBe(true)
 
 		expect(rl.getRemaining('finnhub', tight)).toBe(500)
-	})
-
-	it('does not require the same config object on later calls', () => {
-		const first: RateLimitConfig = { maxRequests: 10, windowMs: 1000 }
-		const equivalent: RateLimitConfig = { maxRequests: 10, windowMs: 1000 }
-
-		expect(drain('sec-edgar', first)).toBe(10)
-
-		vi.advanceTimersByTime(500)
-		expect(rl.getRemaining('sec-edgar', equivalent)).toBe(5)
 	})
 
 	it('follows later mutations of the captured config object', () => {

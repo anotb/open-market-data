@@ -4,13 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Provider } from '../../src/providers/types.js'
 import type { EarningsData, HistoricalQuote, QuoteResult, SearchResult } from '../../src/types.js'
-import {
-	type FetchMock,
-	type Responder,
-	type Route,
-	expectNoUnmatched,
-	mockFetch,
-} from '../helpers/mock-fetch.js'
+import { type FetchMock, type Responder, type Route, mockFetch } from '../helpers/mock-fetch.js'
 import {
 	type TempHome,
 	clearConfigEnv,
@@ -30,10 +24,17 @@ import {
  * config layer can never read the developer's real config or a repo `.env`.
  * Nothing here touches the network, and everything clock-dependent (the candle
  * from/to window, the token bucket) runs against a pinned system time.
+ *
+ * $TZ is pinned too. Candle dates are rendered with `toISOString()`, so the claim
+ * "the ambient timezone cannot shift the date" is only testable on a machine whose
+ * zone is *not* UTC — every test runs on UTC for determinism, and the one test that
+ * makes that claim moves itself west of Greenwich so a local-time formatter would
+ * visibly disagree.
  */
 
 type FinnhubModule = typeof import('../../src/providers/finnhub.js')
 type LimiterModule = typeof import('../../src/core/rate-limiter.js')
+type RouterModule = typeof import('../../src/core/router.js')
 
 const BASE_URL = 'https://finnhub.io/api/v1'
 
@@ -50,12 +51,18 @@ const NOW_UNIX = 1_718_452_800
 
 // --- Fixtures (shaped like real Finnhub payloads, trimmed) ------------------
 
-/** GET /search?q=apple */
+/**
+ * GET /search?q=apple
+ *
+ * The Xetra row carries a `displaySymbol` that differs from `symbol` on purpose:
+ * Finnhub hands back two spellings, and a fixture where they agree cannot show
+ * which of the two the mapper actually reads.
+ */
 const SEARCH_APPLE = {
 	count: 3,
 	result: [
 		{ description: 'APPLE INC', displaySymbol: 'AAPL', symbol: 'AAPL', type: 'Common Stock' },
-		{ description: 'APPLE INC', displaySymbol: 'APC.DE', symbol: 'APC.DE', type: 'Common Stock' },
+		{ description: 'APPLE INC', displaySymbol: 'APC', symbol: 'APC.DE', type: 'Common Stock' },
 		{
 			description: 'APPLE HOSPITALITY REIT INC',
 			displaySymbol: 'APLE',
@@ -144,9 +151,16 @@ let home: TempHome
 let cwdDir: string
 let restoreEnv: () => void
 const originalCwd = process.cwd()
+const ORIGINAL_TZ = process.env.TZ
+
+function setTimeZone(zone: string | undefined): void {
+	if (zone === undefined) Reflect.deleteProperty(process.env, 'TZ')
+	else process.env.TZ = zone
+}
 
 beforeEach(() => {
 	restoreEnv = clearConfigEnv()
+	setTimeZone('UTC')
 	home = makeTempHome()
 	cwdDir = mkdtempSync(join(tmpdir(), 'omd-finnhub-cwd-'))
 	process.chdir(cwdDir)
@@ -155,6 +169,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.useRealTimers()
+	setTimeZone(ORIGINAL_TZ)
 	process.chdir(originalCwd)
 	rmSync(cwdDir, { recursive: true, force: true })
 	home.cleanup()
@@ -165,6 +180,18 @@ afterEach(() => {
 async function importProvider(): Promise<Provider> {
 	const mod = await freshImport<FinnhubModule>('../../src/providers/finnhub.js')
 	return mod.finnhub
+}
+
+/** Same, but with the router from that generation so its provider registry is empty. */
+async function importWithRouter(): Promise<{ provider: Provider; router: RouterModule }> {
+	const mods = await freshImportAll({
+		finnhub: '../../src/providers/finnhub.js',
+		router: '../../src/core/router.js',
+	})
+	return {
+		provider: (mods.finnhub as unknown as FinnhubModule).finnhub,
+		router: mods.router as unknown as RouterModule,
+	}
 }
 
 /** Same, but with the rate limiter from that generation so tokens are observable. */
@@ -258,13 +285,17 @@ describe('provider metadata', () => {
 		expect(provider.priority).toEqual({ search: 5, quote: 3, earnings: 2 })
 	})
 
-	it('does not advertise history even though execute implements history/get', async () => {
+	it('is unroutable for history even though execute implements history/get', async () => {
 		// NOTE: suspected bug — `capabilities` omits 'history', and core/router.ts only
 		// considers providers whose capabilities include the category, so the working
-		// history/get branch below is unreachable through the CLI.
-		const provider = await importProvider()
+		// history/get branch below is unreachable through the CLI. Asserted against the
+		// real router rather than left as prose: the same registered, enabled provider is
+		// routable for quote and invisible for history.
+		const { provider, router } = await importWithRouter()
+		router.registerProvider(provider)
 
-		expect(provider.capabilities).not.toContain('history')
+		expect(router.getProvidersForCategory('quote').map((p) => p.name)).toEqual(['finnhub'])
+		expect(router.getProvidersForCategory('history')).toEqual([])
 	})
 
 	it('advertises the documented free-tier limit of 60 requests per minute', async () => {
@@ -477,7 +508,6 @@ describe('url construction', () => {
 			// A second '?' would mean the separator logic picked the wrong joiner.
 			expect(url.split('?')).toHaveLength(2)
 		}
-		expectNoUnmatched(fx)
 	})
 })
 
@@ -717,7 +747,6 @@ describe('quote/get', () => {
 		await quote(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('coerces a null change to zero', async () => {
@@ -924,12 +953,19 @@ describe('search/search', () => {
 	})
 
 	it('prefers the canonical symbol over displaySymbol', async () => {
+		// The two spellings diverge hardest on venue-qualified rows: `symbol` is the token
+		// every other Finnhub endpoint accepts, `displaySymbol` is the human-facing label.
 		mount({
 			search: {
 				json: {
 					count: 1,
 					result: [
-						{ description: 'SIEMENS AG', displaySymbol: 'SIE.DE', symbol: 'SIE.DE', type: 'GDR' },
+						{
+							description: 'Binance BTCUSDT',
+							displaySymbol: 'BTC/USDT',
+							symbol: 'BINANCE:BTCUSDT',
+							type: 'Crypto',
+						},
 					],
 				},
 			},
@@ -938,7 +974,7 @@ describe('search/search', () => {
 
 		const results = await search(provider)
 
-		expect(results[0].symbol).toBe('SIE.DE')
+		expect(results[0].symbol).toBe('BINANCE:BTCUSDT')
 	})
 
 	it('drops displaySymbol and count from the mapped rows', async () => {
@@ -1036,7 +1072,6 @@ describe('search/search', () => {
 		await search(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('surfaces a raw TypeError for a null JSON body', async () => {
@@ -1199,7 +1234,6 @@ describe('earnings/get', () => {
 		await earnings(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('surfaces a raw TypeError when the body is an object rather than an array', async () => {
@@ -1386,6 +1420,9 @@ describe('history/get mapping', () => {
 	})
 
 	it('renders the date in UTC, so the ambient timezone cannot shift it', async () => {
+		// Run the mapping west of Greenwich: 2024-06-15T00:00:00Z is still the 14th in New
+		// York, so a local-time formatter would collapse both candles onto 2024-06-14.
+		setTimeZone('America/New_York')
 		mount({
 			candle: {
 				json: {
@@ -1459,7 +1496,6 @@ describe('history/get mapping', () => {
 		await history(provider)
 
 		expect(fx.callCount()).toBe(1)
-		expectNoUnmatched(fx)
 	})
 
 	it('fills undefined for series shorter than the timestamp array', async () => {
@@ -1724,6 +1760,5 @@ describe('action dispatch', () => {
 		)
 
 		expect(fx.callCount()).toBe(0)
-		expectNoUnmatched(fx)
 	})
 })

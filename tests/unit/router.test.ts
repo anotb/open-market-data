@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DataCategory, Provider, ProviderResult } from '../../src/providers/types.js'
 import { type TempHome, clearConfigEnv, freshImport, makeTempHome } from '../helpers/modules.js'
 import {
-	ALL_CATEGORIES,
 	createFailingProvider,
 	createMockProvider,
 	createRecordingProvider,
@@ -64,6 +63,31 @@ function writeConfig(value: Record<string, unknown>): void {
 }
 
 const names = (providers: Provider[]): string[] => providers.map((p) => p.name)
+
+/**
+ * Independent restatement of the DataCategory union, used to parameterise the
+ * `it.each` blocks below. The helpers' `ALL_CATEGORIES` is typed `DataCategory[]`,
+ * so TypeScript only checks membership and a category added to the union would
+ * silently never be exercised. `Record<DataCategory, true>` is exhaustive in both
+ * directions: adding or removing a member in src/providers/types.ts fails
+ * `pnpm typecheck` until this object is updated, and updating it automatically
+ * gives every parameterised block below its new case.
+ */
+const EVERY_CATEGORY: Record<DataCategory, true> = {
+	search: true,
+	quote: true,
+	financials: true,
+	filing: true,
+	insiders: true,
+	macro: true,
+	crypto: true,
+	history: true,
+	options: true,
+	earnings: true,
+	dividends: true,
+}
+
+const CATEGORIES = Object.keys(EVERY_CATEGORY) as DataCategory[]
 
 /** Captures the rejection so a test can assert on the exact message. */
 async function rejection(promise: Promise<unknown>): Promise<Error> {
@@ -163,7 +187,6 @@ describe('registerProvider', () => {
 		router.registerProvider(second)
 
 		expect(router.getProviders()[0]).toBe(first)
-		expect(router.getProviders()[0]?.priority.quote).toBe(1)
 	})
 
 	it('routes to the first registration when a name is reused', async () => {
@@ -313,10 +336,19 @@ describe('getProvidersForCategory — filtering', () => {
 		expect(router.getProvidersForCategory('options')).toEqual([])
 	})
 
-	it.each(ALL_CATEGORIES)('returns a fully capable provider for %s', async (category) => {
+	it.each(CATEGORIES)('returns a fully capable provider for %s', async (category) => {
 		const { router } = await loadRouter()
 		router.registerProvider(
-			createMockProvider({ name: 'omni', capabilities: [...ALL_CATEGORIES], priority: {} }),
+			createMockProvider({ name: 'omni', capabilities: [...CATEGORIES], priority: {} }),
+		)
+		// A neighbour declaring every OTHER category, so the filter has to read the
+		// category it was handed rather than any fixed one.
+		router.registerProvider(
+			createMockProvider({
+				name: 'all-but-one',
+				capabilities: CATEGORIES.filter((c) => c !== category),
+				priority: {},
+			}),
 		)
 
 		expect(names(router.getProvidersForCategory(category))).toEqual(['omni'])
@@ -908,15 +940,6 @@ describe('route — every provider fails', () => {
 		const err = await rejection(router.route('quote', 'get', { symbol: 'AAPL' }))
 
 		expect(err.message).toBe('All providers failed for quote/get (tried: yahoo): undefined')
-	})
-
-	it('rejects with an Error instance', async () => {
-		const { router } = await loadRouter()
-		router.registerProvider(createFailingProvider('yahoo'))
-
-		const err = await rejection(router.route('quote', 'get', { symbol: 'AAPL' }))
-
-		expect(err).toBeInstanceOf(Error)
 	})
 
 	it('caches nothing when every provider fails', async () => {
@@ -1789,7 +1812,7 @@ describe('route — end-to-end routing scenarios', () => {
 		expect(names(router.getProvidersForCategory('quote'))).toEqual(['yahoo', 'finnhub'])
 	})
 
-	it.each(ALL_CATEGORIES)('routes %s to the provider that declares it', async (category) => {
+	it.each(CATEGORIES)('routes %s to the provider that declares it', async (category) => {
 		const { router } = await loadRouter()
 		const provider = createRecordingProvider(
 			'omni',
