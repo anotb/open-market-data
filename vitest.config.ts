@@ -24,11 +24,21 @@ export default defineConfig({
 			exclude: ['src/cli.ts', 'src/types.ts', 'src/providers/types.ts'],
 			reporter: ['text', 'html', 'lcov', 'json-summary'],
 			reportsDirectory: './coverage',
+			// Set just below what the suite actually achieves, so an uncovered new
+			// branch trips CI rather than quietly eroding coverage. src/core is held
+			// at a strict 100% — it is the routing, caching, and config logic every
+			// command depends on.
 			thresholds: {
-				lines: 70,
-				functions: 70,
-				branches: 70,
-				statements: 70,
+				lines: 99,
+				functions: 100,
+				branches: 98,
+				statements: 99,
+				'src/core/**': {
+					lines: 100,
+					functions: 100,
+					branches: 100,
+					statements: 100,
+				},
 			},
 		},
 	},
