@@ -83,7 +83,6 @@ describe('router: fallback behavior', () => {
 	// module-level providers array starts clean.
 	let registerProvider: typeof import('../src/core/router.js').registerProvider
 	let route: typeof import('../src/core/router.js').route
-	let getProviders: typeof import('../src/core/router.js').getProviders
 
 	beforeEach(async () => {
 		vi.resetModules()
@@ -91,7 +90,6 @@ describe('router: fallback behavior', () => {
 		const mod = await import('../src/core/router.js')
 		registerProvider = mod.registerProvider
 		route = mod.route
-		getProviders = mod.getProviders
 	})
 
 	it('falls back to the next provider when the first throws', async () => {
@@ -218,7 +216,7 @@ describe('router: caching', () => {
 		)
 		const provider = createMockProvider({
 			name: 'spy-provider',
-			execute: executeSpy,
+			execute: executeSpy as unknown as Provider["execute"],
 		})
 		registerProvider(provider)
 
@@ -241,7 +239,7 @@ describe('router: caching', () => {
 		)
 		const provider = createMockProvider({
 			name: 'no-cache-provider',
-			execute: executeSpy,
+			execute: executeSpy as unknown as Provider["execute"],
 		})
 		registerProvider(provider)
 
