@@ -228,7 +228,9 @@ describe('quote', () => {
 		mockFetch([
 			{
 				match: QUOTE_MATCH,
-				respond: { json: { ...TICKER_24HR, priceChange: '-0.00120000', priceChangePercent: '-12.5' } },
+				respond: {
+					json: { ...TICKER_24HR, priceChange: '-0.00120000', priceChangePercent: '-12.5' },
+				},
 			},
 		])
 		const provider = await importProvider()
@@ -243,7 +245,9 @@ describe('quote', () => {
 		mockFetch([
 			{
 				match: QUOTE_MATCH,
-				respond: { json: { ...TICKER_24HR, priceChange: '812.34000000', priceChangePercent: '1.24' } },
+				respond: {
+					json: { ...TICKER_24HR, priceChange: '812.34000000', priceChangePercent: '1.24' },
+				},
 			},
 		])
 		const provider = await importProvider()
@@ -279,7 +283,9 @@ describe('quote', () => {
 	})
 
 	it('echoes the requested symbol rather than the pair reported upstream', async () => {
-		mockFetch([{ match: QUOTE_MATCH, respond: { json: { ...TICKER_24HR, symbol: 'SOMETHINGELSE' } } }])
+		mockFetch([
+			{ match: QUOTE_MATCH, respond: { json: { ...TICKER_24HR, symbol: 'SOMETHINGELSE' } } },
+		])
 		const provider = await importProvider()
 
 		const quote = await quoteOf(provider, 'btc')
@@ -427,9 +433,7 @@ describe('history', () => {
 	})
 
 	it('accepts a bare six-element kline', async () => {
-		mockFetch([
-			{ match: KLINES_MATCH, respond: { json: [[0, '1', '2', '0.5', '1.5', '100']] } },
-		])
+		mockFetch([{ match: KLINES_MATCH, respond: { json: [[0, '1', '2', '0.5', '1.5', '100']] } }])
 		const provider = await importProvider()
 
 		const candles = await historyOf(provider, { symbol: 'BTC' })
@@ -536,11 +540,9 @@ describe('price', () => {
 		const fx = mockFetch([{ match: PRICE_MATCH, respond: { json: TICKER_PRICE } }])
 		const provider = await importProvider()
 
-		const result = await provider.execute<{ symbol: string; price: number }>(
-			'crypto',
-			'price',
-			{ symbol: 'eth' },
-		)
+		const result = await provider.execute<{ symbol: string; price: number }>('crypto', 'price', {
+			symbol: 'eth',
+		})
 
 		expect(fx.call()?.url).toBe('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT')
 		expect(result).toEqual({
@@ -553,7 +555,9 @@ describe('price', () => {
 	})
 
 	it('coerces the string price to a number', async () => {
-		mockFetch([{ match: PRICE_MATCH, respond: { json: { symbol: 'DOGEUSDT', price: '0.14235000' } } }])
+		mockFetch([
+			{ match: PRICE_MATCH, respond: { json: { symbol: 'DOGEUSDT', price: '0.14235000' } } },
+		])
 		const provider = await importProvider()
 
 		const result = await provider.execute<{ symbol: string; price: number }>('crypto', 'price', {
@@ -599,7 +603,7 @@ describe('geo restriction', () => {
 		await expect(quoteOf(provider, 'BTC')).rejects.toThrow(
 			'Binance is geo-restricted in your region (HTTP 451)',
 		)
-		await expect(quoteOf(provider, 'BTC')).rejects.not.toThrow(/geo-restricted/)
+		await expect(quoteOf(provider, 'BTC')).rejects.not.toThrow(/Binance API error/)
 	})
 
 	it('flips isEnabled() to false once a 451 is seen', async () => {
@@ -716,14 +720,17 @@ describe('HTTP errors', () => {
 
 	it('reports an upstream 429 as an API error, not as the local rate limit', async () => {
 		mockFetch([
-			{ match: QUOTE_MATCH, respond: { status: 429, text: '{"code":-1003,"msg":"Too many requests."}' } },
+			{
+				match: QUOTE_MATCH,
+				respond: { status: 429, text: '{"code":-1003,"msg":"Too many requests."}' },
+			},
 		])
 		const provider = await importProvider()
 
 		await expect(quoteOf(provider, 'BTC')).rejects.toThrow(
 			'Binance API error 429: {"code":-1003,"msg":"Too many requests."}',
 		)
-		await expect(quoteOf(provider, 'BTC')).rejects.not.toThrow('Binance API error 429')
+		await expect(quoteOf(provider, 'BTC')).rejects.not.toThrow('Binance rate limit exceeded')
 	})
 
 	it('reports a 418 (IP ban) as an API error and stays enabled', async () => {

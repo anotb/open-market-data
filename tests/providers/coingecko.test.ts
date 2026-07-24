@@ -250,6 +250,11 @@ const echoPrice: Responder = (ctx) => ({
 	json: { [ctx.parsed.searchParams.get('ids') ?? '']: { usd: 1 } },
 })
 
+/** Removes the key env var (biome forbids the `delete` operator). */
+function unsetApiKey(): void {
+	Reflect.deleteProperty(process.env, 'COINGECKO_API_KEY')
+}
+
 function writeKeyConfig(key: string): void {
 	mkdirSync(join(home.dir, '.omd'), { recursive: true })
 	writeFileSync(home.configFile, JSON.stringify({ coingeckoApiKey: key }, null, 2))
@@ -319,14 +324,14 @@ describe('isEnabled', () => {
 	})
 
 	it('is disabled when no key is configured anywhere', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		const provider = await importProvider()
 
 		expect(provider.isEnabled()).toBe(false)
 	})
 
 	it('is enabled from the config file alone', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		writeKeyConfig('CG-file-key')
 		const provider = await importProvider()
 
@@ -341,7 +346,7 @@ describe('isEnabled', () => {
 	})
 
 	it('is disabled when the config file holds an empty key', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		writeKeyConfig('')
 		const provider = await importProvider()
 
@@ -349,7 +354,7 @@ describe('isEnabled', () => {
 	})
 
 	it('ignores another provider key entirely', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		process.env.FRED_API_KEY = 'fred-key'
 		const provider = await importProvider()
 
@@ -378,7 +383,7 @@ describe('authentication', () => {
 	})
 
 	it('falls back to the config file key', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		writeKeyConfig('CG-file-key')
 		const fx = mount({ trending: { json: TRENDING } })
 		const provider = await importProvider()
@@ -389,7 +394,7 @@ describe('authentication', () => {
 	})
 
 	it('throws a configuration hint when no key is available', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		const provider = await importProvider()
 
 		await expect(getTrending(provider)).rejects.toThrow(
@@ -398,7 +403,7 @@ describe('authentication', () => {
 	})
 
 	it('never issues a request when the key is missing', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		const fx = mount({ trending: { json: TRENDING } })
 		const provider = await importProvider()
 
@@ -408,7 +413,7 @@ describe('authentication', () => {
 	})
 
 	it('checks the key on every action, including ones that resolve a coin id first', async () => {
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		const fx = mount({ price: { json: BITCOIN_PRICE } })
 		const provider = await importProvider()
 
@@ -508,7 +513,7 @@ describe('rate limiting', () => {
 		// NOTE: suspected bug — `request()` consumes a token before `getApiKey()`, so an
 		// unconfigured install exhausts its 30/min budget on requests never sent, and the
 		// user then sees a misleading "rate limit exceeded" instead of the setup hint.
-		delete process.env.COINGECKO_API_KEY
+		unsetApiKey()
 		const fx = mount({ trending: { json: TRENDING } })
 		const provider = await importProvider()
 		vi.useFakeTimers()
