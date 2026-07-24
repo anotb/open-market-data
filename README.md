@@ -126,6 +126,19 @@ omd quote AAPL --source finnhub
 omd macro NY.GDP.MKTP.CD --source worldbank
 ```
 
+## Development
+
+```bash
+pnpm install
+pnpm build
+pnpm check        # lint + typecheck + tests
+```
+
+The default test suite mocks every network call, so `pnpm test` runs offline and
+never flakes. Tests that hit the real APIs live in `tests/live/` and run separately
+with `pnpm test:live`. See [docs/TESTING.md](docs/TESTING.md) for the test harness and
+the rules for adding new tests.
+
 ## License
 
 MIT
