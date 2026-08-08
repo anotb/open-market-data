@@ -1,0 +1,38 @@
+{
+  "name": "open-market-data",
+  "version": "0.2.0",
+  "description": "Read-only market, SEC, crypto, and macroeconomic data for agents.",
+  "author": {
+    "name": "anotb",
+    "url": "https://github.com/anotb"
+  },
+  "homepage": "https://github.com/anotb/open-market-data",
+  "repository": "https://github.com/anotb/open-market-data",
+  "license": "MIT",
+  "keywords": [
+    "finance",
+    "market-data",
+    "stocks",
+    "crypto",
+    "sec-edgar",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Open Market Data",
+    "shortDescription": "Read-only market and economic data",
+    "longDescription": "Query stocks, company financials, SEC filings, crypto markets, and macroeconomic series from free public sources with automatic fallback and provenance.",
+    "developerName": "anotb",
+    "category": "Productivity",
+    "capabilities": [
+      "Read"
+    ],
+    "websiteURL": "https://github.com/anotb/open-market-data",
+    "defaultPrompt": [
+      "Research AAPL using current quotes, recent financials, price performance, earnings, and SEC filings.",
+      "Compare the latest quotes and 30-day performance for AAPL, MSFT, and GOOGL.",
+      "Show recent US GDP and unemployment data, preserving each source."
+    ]
+  }
+}

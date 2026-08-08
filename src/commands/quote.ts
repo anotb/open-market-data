@@ -8,6 +8,7 @@ import {
 } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { GlobalOptions, QuoteResult } from '../types.js'
+import { symbol as normalizedSymbol } from './validation.js'
 
 export function registerQuoteCommand(program: Command): void {
 	program
@@ -15,12 +16,17 @@ export function registerQuoteCommand(program: Command): void {
 		.description('Get stock/asset quotes')
 		.action(async (symbols: string[]) => {
 			const opts = program.opts<GlobalOptions>()
+			if (symbols.length > 20) throw new Error('quote accepts at most 20 symbols')
+			const tickers = symbols.map(normalizedSymbol)
+			if (new Set(tickers).size !== tickers.length) {
+				throw new Error('symbols must remain unique after normalization')
+			}
 
-			if (symbols.length === 1) {
+			if (tickers.length === 1) {
 				const result = await route<QuoteResult>(
 					'quote',
 					'get',
-					{ symbol: symbols[0] },
+					{ symbol: tickers[0] },
 					{
 						source: opts.source,
 						noCache: opts.noCache,
@@ -57,7 +63,7 @@ export function registerQuoteCommand(program: Command): void {
 					const batchResult = await route<QuoteResult[]>(
 						'quote',
 						'get',
-						{ symbols },
+						{ symbols: tickers },
 						{ source: opts.source, noCache: opts.noCache },
 					)
 					results = batchResult.data.map((q) => ({
@@ -68,7 +74,7 @@ export function registerQuoteCommand(program: Command): void {
 				} catch {
 					// Fall back to concurrent individual requests
 					results = await Promise.all(
-						symbols.map((s) =>
+						tickers.map((s) =>
 							route<QuoteResult>(
 								'quote',
 								'get',

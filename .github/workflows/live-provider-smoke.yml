@@ -1,0 +1,58 @@
+name: Live provider smoke tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**/*.live.test.ts'
+      - 'scripts/package-smoke.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'plugin.json'
+      - 'mcp.json'
+      - '.mcp.json'
+      - '.codex-plugin/**'
+      - 'skills/**'
+      - '.github/workflows/live-provider-smoke.yml'
+  schedule:
+    - cron: '23 11 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-provider-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EDGAR_USER_AGENT: open-market-data anot.irky@gmail.com
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Credential coverage
+        run: |
+          node -e 'for (const name of ["FRED_API_KEY", "FINNHUB_API_KEY", "ALPHA_VANTAGE_API_KEY"]) console.log(`${name}: ${process.env[name] ? "CONFIGURED" : "NOT_CONFIGURED"}`)'
+      - name: Provider health report
+        run: node dist/cli.js --json doctor
+      - run: pnpm test:live
+      - name: Packed artifact live smoke
+        run: pnpm test:package:live

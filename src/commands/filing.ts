@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { Filing, GlobalOptions } from '../types.js'
+import { boundedInteger, boundedText, symbol as normalizedSymbol } from './validation.js'
 
 export function registerFilingCommand(program: Command): void {
 	program
@@ -12,14 +13,17 @@ export function registerFilingCommand(program: Command): void {
 		.option('-l, --limit <n>', 'number of filings', '20')
 		.action(async (symbol: string, cmdOpts: { type?: string; latest?: boolean; limit: string }) => {
 			const opts = program.opts<GlobalOptions>()
+			const ticker = normalizedSymbol(symbol)
+			const limit = boundedInteger(cmdOpts.limit, '--limit', 1, 100)
+			const formType = cmdOpts.type ? boundedText(cmdOpts.type, '--type', 32) : undefined
 			const result = await route<Filing[]>(
 				'filing',
 				'list',
 				{
-					symbol,
-					type: cmdOpts.type,
+					symbol: ticker,
+					type: formType,
 					latest: cmdOpts.latest,
-					limit: Number.parseInt(cmdOpts.limit, 10),
+					limit,
 				},
 				{
 					source: opts.source,

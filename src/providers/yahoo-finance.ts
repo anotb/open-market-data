@@ -1,4 +1,5 @@
 import YahooFinance from 'yahoo-finance2'
+import { fetchWithTimeout } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type {
 	DividendEvent,
@@ -13,7 +14,10 @@ import type { DataCategory, Provider, ProviderResult } from './types.js'
 
 const SOURCE = 'yahoo'
 
-const yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] })
+const yf = new YahooFinance({
+	suppressNotices: ['yahooSurvey', 'ripHistorical'],
+	fetch: fetchWithTimeout,
+})
 
 // Yahoo Finance search quote shape (simplified from the full union)
 interface YFSearchQuote {

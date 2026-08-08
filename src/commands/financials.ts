@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { formatNumber, formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { FinancialStatement, GlobalOptions } from '../types.js'
+import { boundedInteger, choice, symbol as normalizedSymbol } from './validation.js'
 
 export function registerFinancialsCommand(program: Command): void {
 	program
@@ -11,13 +12,16 @@ export function registerFinancialsCommand(program: Command): void {
 		.option('-l, --limit <n>', 'number of periods', '5')
 		.action(async (symbol: string, cmdOpts: { period: string; limit: string }) => {
 			const opts = program.opts<GlobalOptions>()
+			const ticker = normalizedSymbol(symbol)
+			const period = choice(cmdOpts.period, '--period', ['annual', 'quarterly'] as const)
+			const limit = boundedInteger(cmdOpts.limit, '--limit', 1, 40)
 			const result = await route<FinancialStatement[]>(
 				'financials',
 				'get',
 				{
-					symbol,
-					period: cmdOpts.period,
-					limit: Number.parseInt(cmdOpts.limit, 10),
+					symbol: ticker,
+					period,
+					limit,
 				},
 				{
 					source: opts.source,

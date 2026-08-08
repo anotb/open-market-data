@@ -3,6 +3,8 @@ import type { MacroDataPoint, MacroSeries } from '../types.js'
 import type { DataCategory, Provider, ProviderResult } from './types.js'
 
 const BASE_URL = 'https://api.worldbank.org/v2'
+const REQUEST_TIMEOUT_MS = 15_000
+const MAX_ERROR_LENGTH = 500
 
 interface WbPagination {
 	page: number
@@ -46,10 +48,6 @@ async function wbFetch<T>(
 	path: string,
 	params: Record<string, string | number | undefined> = {},
 ): Promise<WbResponse<T>> {
-	if (!consumeToken('worldbank', worldBank.rateLimits)) {
-		throw new Error('[worldbank] Rate limit exceeded. Try again shortly.')
-	}
-
 	const url = new URL(`${BASE_URL}${path}`)
 	url.searchParams.set('format', 'json')
 
@@ -59,14 +57,34 @@ async function wbFetch<T>(
 		}
 	}
 
-	const response = await fetch(url.toString())
+	let response: Response | undefined
+	let lastError: unknown
+	for (let attempt = 0; attempt < 2; attempt++) {
+		if (!consumeToken('worldbank', worldBank.rateLimits)) {
+			throw new Error('[worldbank] Rate limit exceeded. Try again shortly.')
+		}
+		try {
+			response = await fetch(url.toString(), { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+			if (response.ok || !isRetryableStatus(response.status) || attempt === 1) break
+		} catch (error) {
+			lastError = error
+			if (attempt === 1) {
+				throw new Error(`[worldbank] Request failed after two attempts: ${compactError(error)}`)
+			}
+		}
+	}
 
+	if (!response) {
+		throw new Error(`[worldbank] Request failed: ${compactError(lastError)}`)
+	}
 	if (!response.ok) {
-		const text = await response.text()
-		throw new Error(`[worldbank] API error (${response.status}): ${text}`)
+		const body = compactText(await response.text())
+		throw new Error(`[worldbank] API error (${response.status}): ${body}`)
 	}
 
 	const json = await response.json()
+	const apiError = worldBankApiError(json)
+	if (apiError) throw new Error(`[worldbank] API error: ${apiError}`)
 
 	// World Bank returns a two-element array: [pagination, data]
 	if (!Array.isArray(json) || json.length < 2) {
@@ -74,6 +92,38 @@ async function wbFetch<T>(
 	}
 
 	return json as WbResponse<T>
+}
+
+function isRetryableStatus(status: number): boolean {
+	return status === 429 || status >= 500
+}
+
+function compactError(error: unknown): string {
+	return compactText(error instanceof Error ? error.message : String(error))
+}
+
+function compactText(value: string): string {
+	const compact = value.replace(/\s+/g, ' ').trim() || 'Unknown upstream error'
+	return compact.length <= MAX_ERROR_LENGTH
+		? compact
+		: `${compact.slice(0, MAX_ERROR_LENGTH - 3)}...`
+}
+
+function worldBankApiError(value: unknown): string | undefined {
+	if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) return undefined
+	const messages = value[0].message
+	if (!Array.isArray(messages)) return undefined
+	const details = messages
+		.filter(isRecord)
+		.map((message) =>
+			[message.key, message.value].filter((part) => typeof part === 'string').join(': '),
+		)
+		.filter(Boolean)
+	return details.length > 0 ? details.join('; ') : 'The provider rejected the request.'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function searchIndicators(
@@ -128,22 +178,17 @@ async function getIndicatorData(
 
 	const params: Record<string, string | number | undefined> = {}
 
-	if (limit != null) {
+	if (start || end) {
+		// The World Bank date query has periodically stalled at the edge. Fetch a
+		// bounded recent window and filter locally for predictable behavior.
+		params.mrv = 250
+		params.per_page = 250
+	} else if (limit != null) {
 		params.mrv = limit
 		params.per_page = limit
 	} else {
-		params.per_page = 50
-	}
-
-	if (start || end) {
-		const currentYear = new Date().getFullYear()
-		const startYear = start ? new Date(start).getFullYear() : currentYear - 20
-		const endYear = end ? new Date(end).getFullYear() : currentYear
-		params.date = `${startYear}:${endYear}`
-	} else if (limit == null) {
-		// Default: last 20 years
-		const currentYear = new Date().getFullYear()
-		params.date = `${currentYear - 20}:${currentYear}`
+		params.mrv = 20
+		params.per_page = 20
 	}
 
 	const country = (args.country as string | undefined) ?? 'US'
@@ -172,13 +217,22 @@ async function getIndicatorData(
 
 	const title = entries[0].indicator.value || seriesId
 
-	const dataPoints: MacroDataPoint[] = entries
+	let dataPoints: MacroDataPoint[] = entries
 		.filter((entry) => entry.value !== null)
 		.map((entry) => ({
 			date: entry.date,
 			value: entry.value as number,
 		}))
 		.sort((a, b) => a.date.localeCompare(b.date))
+
+	if (start || end) {
+		const startYear = start?.slice(0, 4)
+		const endYear = end?.slice(0, 4)
+		dataPoints = dataPoints.filter(
+			(point) => (!startYear || point.date >= startYear) && (!endYear || point.date <= endYear),
+		)
+	}
+	if (limit != null) dataPoints = dataPoints.slice(-limit)
 
 	const series: MacroSeries = {
 		id: seriesId,

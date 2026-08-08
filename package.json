@@ -1,31 +1,51 @@
 {
   "name": "open-market-data",
-  "version": "0.1.0",
-  "description": "Unified CLI for free financial data APIs — SEC EDGAR, Yahoo Finance, Binance, CoinGecko, FRED",
+  "version": "0.2.0",
+  "description": "Portable Agent Plugin and read-only SDK for market, SEC, crypto, and macroeconomic data",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./webmcp": {
+      "types": "./dist/webmcp.d.ts",
+      "import": "./dist/webmcp.js"
     }
   },
   "bin": {
-    "omd": "dist/cli.js"
+    "omd": "dist/cli.js",
+    "omd-mcp": "dist/mcp-cli.js",
+    "open-market-data": "dist/package-cli.js"
   },
+  "mcpName": "io.github.anotb/open-market-data",
+  "sideEffects": false,
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
+    "start:mcp": "node dist/mcp-cli.js",
+    "doctor": "node dist/cli.js doctor",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "test:mcp": "vitest run tests/agent.test.ts tests/health.test.ts tests/mcp.test.ts tests/webmcp.test.ts",
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:package:live": "node scripts/package-smoke.mjs --live",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
-    "format": "biome format --write src/",
-    "check": "biome check src/ && tsc --noEmit && vitest run"
+    "lint": "biome check src/ tests/ scripts/",
+    "lint:fix": "biome check --write src/ tests/ scripts/",
+    "format": "biome format --write src/ tests/ scripts/",
+    "check": "node scripts/validate-agent-plugin.mjs && biome check src/ tests/ scripts/ && tsc --noEmit && vitest run",
+    "prepack": "npm run clean && npm run validate:plugin && npm run build",
+    "validate:plugin": "node scripts/validate-agent-plugin.mjs"
   },
   "keywords": [
     "finance",
@@ -37,24 +57,44 @@
     "binance",
     "coingecko",
     "cli",
-    "market-data"
+    "market-data",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "webmcp",
+    "economic-data",
+    "agent-plugins",
+    "agent-skills",
+    "portable-agent-plugin"
   ],
   "author": "anotb",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anotb/open-market-data.git"
+    "url": "git+https://github.com/anotb/open-market-data.git"
   },
   "homepage": "https://github.com/anotb/open-market-data",
   "files": [
+    "scripts/validate-agent-plugin.mjs",
+    "docs/AGENT-PLUGIN.md",
+    ".mcp.json",
+    ".codex-plugin",
+    "mcp.json",
+    "plugin.json",
     "dist",
     "skills",
+    "docs/MCP.md",
+    "docs/PROVIDERS.md",
+    "server.json",
+    "llms.txt",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "LICENSE",
     "README.md"
   ],
   "dependencies": {
     "commander": "^13.1.0",
-    "yahoo-finance2": "^3.13.0",
+    "yahoo-finance2": "^4.0.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -64,6 +104,12 @@
     "vitest": "^3.0.5"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/anotb/open-market-data/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

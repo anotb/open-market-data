@@ -1,0 +1,58 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.anotb/open-market-data",
+  "title": "Open Market Data",
+  "description": "Read-only market, SEC, crypto, and macroeconomic data with provenance and free providers.",
+  "repository": {
+    "url": "https://github.com/anotb/open-market-data",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "open-market-data",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "FRED_API_KEY",
+          "description": "Optional free FRED API key for US economic time series and search.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "COINGECKO_API_KEY",
+          "description": "Optional CoinGecko demo API key for rankings and broader crypto coverage.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "FINNHUB_API_KEY",
+          "description": "Optional Finnhub API key for quote and earnings fallback.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "ALPHA_VANTAGE_API_KEY",
+          "description": "Optional Alpha Vantage API key for quote, financial, and history fallback.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "EDGAR_USER_AGENT",
+          "description": "Descriptive SEC EDGAR user agent with an application name and contact email.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import {
-	canRequest,
-	consumeToken,
-	getRemaining,
-	resetBucket,
-} from '../src/core/rate-limiter.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as cache from '../src/core/cache.js'
-import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from '../src/providers/types.js'
+import { canRequest, consumeToken, getRemaining, resetBucket } from '../src/core/rate-limiter.js'
+import type {
+	DataCategory,
+	Provider,
+	ProviderResult,
+	RateLimitConfig,
+} from '../src/providers/types.js'
 
 // Helper to create a mock provider
 function createMockProvider(overrides: Partial<Provider> & { name: string }): Provider {
@@ -17,7 +17,11 @@ function createMockProvider(overrides: Partial<Provider> & { name: string }): Pr
 		rateLimits: { maxRequests: 100, windowMs: 60_000 },
 		isEnabled: () => true,
 		execute: async <T>(_cat: DataCategory, _action: string, _args: Record<string, unknown>) =>
-			({ data: { price: 42 } as unknown as T, source: overrides.name, cached: false }) as ProviderResult<T>,
+			({
+				data: { price: 42 } as unknown as T,
+				source: overrides.name,
+				cached: false,
+			}) as ProviderResult<T>,
 		...overrides,
 	}
 }
@@ -106,7 +110,11 @@ describe('router: fallback behavior', () => {
 			name: 'ok-provider',
 			priority: { quote: 2 },
 			execute: async <T>() =>
-				({ data: { price: 99 } as unknown as T, source: 'ok-provider', cached: false }) as ProviderResult<T>,
+				({
+					data: { price: 99 } as unknown as T,
+					source: 'ok-provider',
+					cached: false,
+				}) as ProviderResult<T>,
 		})
 
 		registerProvider(failProvider)
@@ -120,11 +128,15 @@ describe('router: fallback behavior', () => {
 	it('throws when all providers fail', async () => {
 		const p1 = createMockProvider({
 			name: 'bad-1',
-			execute: async () => { throw new Error('fail-1') },
+			execute: async () => {
+				throw new Error('fail-1')
+			},
 		})
 		const p2 = createMockProvider({
 			name: 'bad-2',
-			execute: async () => { throw new Error('fail-2') },
+			execute: async () => {
+				throw new Error('fail-2')
+			},
 		})
 
 		registerProvider(p1)
@@ -153,13 +165,21 @@ describe('router: --source flag', () => {
 			name: 'alpha',
 			priority: { quote: 1 },
 			execute: async <T>() =>
-				({ data: { origin: 'alpha' } as unknown as T, source: 'alpha', cached: false }) as ProviderResult<T>,
+				({
+					data: { origin: 'alpha' } as unknown as T,
+					source: 'alpha',
+					cached: false,
+				}) as ProviderResult<T>,
 		})
 		const beta = createMockProvider({
 			name: 'beta',
 			priority: { quote: 2 },
 			execute: async <T>() =>
-				({ data: { origin: 'beta' } as unknown as T, source: 'beta', cached: false }) as ProviderResult<T>,
+				({
+					data: { origin: 'beta' } as unknown as T,
+					source: 'beta',
+					cached: false,
+				}) as ProviderResult<T>,
 		})
 
 		registerProvider(alpha)
@@ -181,6 +201,39 @@ describe('router: --source flag', () => {
 			route('quote', 'price', { symbol: 'X' }, { source: 'nonexistent' }),
 		).rejects.toThrow(/Source "nonexistent" not available/)
 	})
+
+	it('explains a missing credential for a forced provider', async () => {
+		const fred = createMockProvider({
+			name: 'fred',
+			capabilities: ['macro'],
+			requiresKey: true,
+			keyEnvVar: 'FRED_API_KEY',
+			isEnabled: () => false,
+		})
+		registerProvider(fred)
+
+		await expect(route('macro', 'get', { seriesId: 'GDP' }, { source: 'fred' })).rejects.toThrow(
+			/not configured.*FRED_API_KEY/i,
+		)
+	})
+
+	it('explains when a forced provider is disabled in configuration', async () => {
+		vi.doMock('../src/core/config.js', () => ({
+			loadConfig: () => ({ disabledSources: ['alpha'] }),
+		}))
+		try {
+			vi.resetModules()
+			const mod = await import('../src/core/router.js')
+			const alpha = createMockProvider({ name: 'alpha' })
+			mod.registerProvider(alpha)
+
+			await expect(
+				mod.route('quote', 'get', { symbol: 'AAPL' }, { source: 'alpha' }),
+			).rejects.toThrow(/disabled in configuration/i)
+		} finally {
+			vi.doUnmock('../src/core/config.js')
+		}
+	})
 })
 
 describe('router: no providers', () => {
@@ -194,9 +247,7 @@ describe('router: no providers', () => {
 	})
 
 	it('throws when no providers are registered for a category', async () => {
-		await expect(
-			route('quote', 'price', { symbol: 'X' }),
-		).rejects.toThrow(/No providers available/)
+		await expect(route('quote', 'price', { symbol: 'X' })).rejects.toThrow(/No providers available/)
 	})
 })
 
@@ -213,8 +264,13 @@ describe('router: caching', () => {
 	})
 
 	it('returns cached result without calling provider execute a second time', async () => {
-		const executeSpy = vi.fn(async <T>() =>
-			({ data: { price: 200 } as unknown as T, source: 'spy-provider', cached: false }) as ProviderResult<T>,
+		const executeSpy = vi.fn(
+			async <T>() =>
+				({
+					data: { price: 200 } as unknown as T,
+					source: 'spy-provider',
+					cached: false,
+				}) as ProviderResult<T>,
 		)
 		const provider = createMockProvider({
 			name: 'spy-provider',
@@ -236,8 +292,13 @@ describe('router: caching', () => {
 	})
 
 	it('bypasses cache when noCache option is set', async () => {
-		const executeSpy = vi.fn(async <T>() =>
-			({ data: { price: 300 } as unknown as T, source: 'no-cache-provider', cached: false }) as ProviderResult<T>,
+		const executeSpy = vi.fn(
+			async <T>() =>
+				({
+					data: { price: 300 } as unknown as T,
+					source: 'no-cache-provider',
+					cached: false,
+				}) as ProviderResult<T>,
 		)
 		const provider = createMockProvider({
 			name: 'no-cache-provider',
@@ -338,12 +399,20 @@ describe('router: duplicate provider registration', () => {
 		const first = createMockProvider({
 			name: 'same-name',
 			execute: async <T>() =>
-				({ data: { version: 1 } as unknown as T, source: 'same-name', cached: false }) as ProviderResult<T>,
+				({
+					data: { version: 1 } as unknown as T,
+					source: 'same-name',
+					cached: false,
+				}) as ProviderResult<T>,
 		})
 		const second = createMockProvider({
 			name: 'same-name',
 			execute: async <T>() =>
-				({ data: { version: 2 } as unknown as T, source: 'same-name', cached: false }) as ProviderResult<T>,
+				({
+					data: { version: 2 } as unknown as T,
+					source: 'same-name',
+					cached: false,
+				}) as ProviderResult<T>,
 		})
 
 		registerProvider(first)

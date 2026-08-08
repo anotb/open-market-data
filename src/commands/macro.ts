@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { formatKeyValue, formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { GlobalOptions, MacroSeries, OutputFormat } from '../types.js'
+import { boundedInteger, boundedText, countryCode, isoDate } from './validation.js'
 
 // FRED search returns this shape (not SearchResult)
 interface FredSearchResult {
@@ -59,20 +60,22 @@ function displaySeries(
 }
 
 export function registerMacroCommand(program: Command): void {
-	const macro = program.command('macro').description('Macroeconomic data from FRED')
+	const macro = program.command('macro').description('Macroeconomic data from FRED or World Bank')
 
 	macro
 		.command('search <query>')
-		.description('Search FRED series')
+		.description('Search macroeconomic series')
 		.option('-l, --limit <n>', 'number of results', '20')
 		.action(async (query: string, cmdOpts: { limit: string }) => {
 			const opts = program.opts<GlobalOptions>()
+			const normalizedQuery = boundedText(query, 'query', 200)
+			const limit = boundedInteger(cmdOpts.limit, '--limit', 1, 100)
 			const result = await route<FredSearchResult[]>(
 				'macro',
 				'search',
 				{
-					query,
-					limit: Number.parseInt(cmdOpts.limit, 10),
+					query: normalizedQuery,
+					limit,
 				},
 				{
 					source: opts.source,
@@ -103,20 +106,24 @@ export function registerMacroCommand(program: Command): void {
 				}
 
 				const opts = program.opts<GlobalOptions>()
+				const normalizedSeriesId = boundedText(seriesId, 'seriesId', 128).toUpperCase()
+				if (/\s/.test(normalizedSeriesId)) throw new Error('seriesId must not contain whitespace')
+				const country = countryCode(cmdOpts.country ?? 'US')
+				const start = cmdOpts.start ? isoDate(cmdOpts.start, '--start') : undefined
+				const end = cmdOpts.end ? isoDate(cmdOpts.end, '--end') : undefined
+				if (start && end && start > end) throw new Error('--start must be on or before --end')
+				const limit = cmdOpts.limit ? boundedInteger(cmdOpts.limit, '--limit', 1, 1000) : undefined
 				// Non-US country data only available from World Bank
-				const source =
-					cmdOpts.country && cmdOpts.country.toUpperCase() !== 'US'
-						? (opts.source ?? 'worldbank')
-						: opts.source
+				const source = country !== 'US' ? (opts.source ?? 'worldbank') : opts.source
 				const result = await route<MacroSeries>(
 					'macro',
 					'get',
 					{
-						seriesId: seriesId.toUpperCase(),
-						start: cmdOpts.start,
-						end: cmdOpts.end,
-						limit: cmdOpts.limit ? Number.parseInt(cmdOpts.limit, 10) : undefined,
-						country: cmdOpts.country,
+						seriesId: normalizedSeriesId,
+						start,
+						end,
+						limit,
+						country,
 					},
 					{
 						source,
