@@ -1,4 +1,5 @@
 import { loadConfig } from '../core/config.js'
+import { fetchWithTimeout } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { FinancialStatement, HistoricalQuote, QuoteResult, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult } from './types.js'
@@ -27,7 +28,7 @@ async function avFetch<T>(params: Record<string, string>): Promise<T> {
 	}
 	url.searchParams.set('apikey', getApiKey())
 
-	const response = await fetch(url.toString())
+	const response = await fetchWithTimeout(url)
 
 	if (!response.ok) {
 		throw new Error(`[${SOURCE}] HTTP ${response.status}: ${response.statusText}`)
@@ -35,24 +36,29 @@ async function avFetch<T>(params: Record<string, string>): Promise<T> {
 
 	const data = (await response.json()) as Record<string, unknown>
 
-	// Alpha Vantage returns 200 with error in the body
+	// Alpha Vantage returns HTTP 200 with errors in the response body.
 	if (data['Error Message']) {
-		throw new Error(`[${SOURCE}] ${data['Error Message'] as string}`)
+		throw new Error(`[${SOURCE}] ${boundedMessage(data['Error Message'])}`)
 	}
 	if (data.Note) {
-		throw new Error(`[${SOURCE}] ${data.Note as string}`)
+		throw new Error(`[${SOURCE}] ${boundedMessage(data.Note)}`)
 	}
 	if (data.Information) {
-		throw new Error(`[${SOURCE}] ${data.Information as string}`)
+		throw new Error(`[${SOURCE}] ${boundedMessage(data.Information)}`)
 	}
 
 	return data as T
 }
 
-function toNum(v: unknown): number | undefined {
-	if (v == null || v === '' || v === 'None') return undefined
-	const n = Number(v)
-	return Number.isNaN(n) ? undefined : n
+function boundedMessage(value: unknown): string {
+	const compact = String(value).replace(/\s+/g, ' ').trim() || 'Unknown provider error'
+	return compact.length <= 500 ? compact : `${compact.slice(0, 497)}...`
+}
+
+function toNum(value: unknown): number | undefined {
+	if (value == null || value === '' || value === 'None') return undefined
+	const number = Number(value)
+	return Number.isNaN(number) ? undefined : number
 }
 
 interface AVSearchMatch {
@@ -113,11 +119,11 @@ async function searchSymbols(
 		keywords: query,
 	})
 
-	const results: SearchResult[] = (data.bestMatches ?? []).map((m) => ({
-		symbol: m['1. symbol'],
-		name: m['2. name'],
-		exchange: m['4. region'],
-		type: m['3. type'],
+	const results: SearchResult[] = (data.bestMatches ?? []).map((match) => ({
+		symbol: match['1. symbol'],
+		name: match['2. name'],
+		exchange: match['4. region'],
+		type: match['3. type'],
 		source: SOURCE,
 	}))
 
@@ -133,24 +139,24 @@ async function getQuote(args: Record<string, unknown>): Promise<ProviderResult<Q
 		symbol,
 	})
 
-	const q = data['Global Quote']
-	if (!q || !q['01. symbol']) {
+	const quote = data['Global Quote']
+	if (!quote || !quote['01. symbol']) {
 		throw new Error(`[${SOURCE}] No quote data returned for "${symbol}"`)
 	}
 
-	const changePercentRaw = q['10. change percent'] ?? '0'
+	const changePercentRaw = quote['10. change percent'] ?? '0'
 	const changePercent = Number(changePercentRaw.replace('%', ''))
 
 	const result: QuoteResult = {
-		symbol: q['01. symbol'],
-		price: toNum(q['05. price']) ?? 0,
-		change: toNum(q['09. change']) ?? 0,
+		symbol: quote['01. symbol'],
+		price: toNum(quote['05. price']) ?? 0,
+		change: toNum(quote['09. change']) ?? 0,
 		changePercent: Number.isNaN(changePercent) ? 0 : changePercent,
-		volume: toNum(q['06. volume']),
-		open: toNum(q['02. open']),
-		previousClose: toNum(q['08. previous close']),
-		dayHigh: toNum(q['03. high']),
-		dayLow: toNum(q['04. low']),
+		volume: toNum(quote['06. volume']),
+		open: toNum(quote['02. open']),
+		previousClose: toNum(quote['08. previous close']),
+		dayHigh: toNum(quote['03. high']),
+		dayLow: toNum(quote['04. low']),
 		source: SOURCE,
 	}
 
@@ -165,6 +171,10 @@ async function getFinancials(
 
 	const period = (args.period as 'annual' | 'quarterly') ?? 'annual'
 	const reportKey = period === 'annual' ? 'annualReports' : 'quarterlyReports'
+	const requestedLimit = Number(args.limit ?? 5)
+	const limit = Number.isFinite(requestedLimit)
+		? Math.max(1, Math.min(100, Math.trunc(requestedLimit)))
+		: 5
 
 	const [incomeData, balanceData] = await Promise.all([
 		avFetch<Record<string, AVIncomeReport[]>>({
@@ -180,27 +190,26 @@ async function getFinancials(
 	const incomeReports: AVIncomeReport[] = incomeData[reportKey] ?? []
 	const balanceReports: AVBalanceReport[] = balanceData[reportKey] ?? []
 
-	// Index balance sheet by date for quick lookup
 	const balanceByDate = new Map<string, AVBalanceReport>()
-	for (const b of balanceReports) {
-		balanceByDate.set(b.fiscalDateEnding, b)
+	for (const balance of balanceReports) {
+		balanceByDate.set(balance.fiscalDateEnding, balance)
 	}
 
-	const statements: FinancialStatement[] = incomeReports.slice(0, 5).map((inc) => {
-		const bal = balanceByDate.get(inc.fiscalDateEnding)
+	const statements: FinancialStatement[] = incomeReports.slice(0, limit).map((income) => {
+		const balance = balanceByDate.get(income.fiscalDateEnding)
 		return {
 			period,
-			date: inc.fiscalDateEnding,
-			revenue: toNum(inc.totalRevenue),
-			grossProfit: toNum(inc.grossProfit),
-			operatingIncome: toNum(inc.operatingIncome),
-			netIncome: toNum(inc.netIncome),
-			operatingCashFlow: toNum(inc.operatingCashflow),
-			totalAssets: toNum(bal?.totalAssets),
-			totalLiabilities: toNum(bal?.totalLiabilities),
-			stockholdersEquity: toNum(bal?.totalShareholderEquity),
-			longTermDebt: toNum(bal?.longTermDebt),
-			sharesOutstanding: toNum(bal?.commonStockSharesOutstanding),
+			date: income.fiscalDateEnding,
+			revenue: toNum(income.totalRevenue),
+			grossProfit: toNum(income.grossProfit),
+			operatingIncome: toNum(income.operatingIncome),
+			netIncome: toNum(income.netIncome),
+			operatingCashFlow: toNum(income.operatingCashflow),
+			totalAssets: toNum(balance?.totalAssets),
+			totalLiabilities: toNum(balance?.totalLiabilities),
+			stockholdersEquity: toNum(balance?.totalShareholderEquity),
+			longTermDebt: toNum(balance?.longTermDebt),
+			sharesOutstanding: toNum(balance?.commonStockSharesOutstanding),
 			source: SOURCE,
 		}
 	})

@@ -1,11 +1,12 @@
 import { loadConfig } from '../core/config.js'
+import { fetchWithTimeout } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { Filing, FinancialStatement, InsiderTransaction, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './types.js'
 
 const SEARCH_BASE = 'https://efts.sec.gov'
 const DATA_BASE = 'https://data.sec.gov'
-const DEFAULT_USER_AGENT = 'open-market-data (dev@example.com)'
+const DEFAULT_USER_AGENT = 'open-market-data anot.irky@gmail.com'
 let userAgentWarned = false
 
 // --- Ticker map cache ---
@@ -32,14 +33,18 @@ function padCik(cik: number): string {
 	return `CIK${String(cik).padStart(10, '0')}`
 }
 
-async function fetchWithAgent(url: string, rateLimits: RateLimitConfig): Promise<Response> {
+async function fetchWithAgent(
+	url: string,
+	rateLimits: RateLimitConfig,
+	accept = 'application/json',
+): Promise<Response> {
 	if (!consumeToken('sec-edgar', rateLimits)) {
 		throw new Error('SEC EDGAR rate limit exceeded — max 10 requests/second')
 	}
-	return fetch(url, {
+	return fetchWithTimeout(url, {
 		headers: {
 			'User-Agent': getUserAgent(),
-			Accept: 'application/json',
+			Accept: accept,
 		},
 	})
 }
@@ -405,59 +410,122 @@ async function executeInsiders(
 
 	const map = await loadTickerMap(rateLimits)
 	const { cik } = lookupTicker(map, symbol)
-	const paddedCik = String(cik).padStart(10, '0')
-
-	// Search for Form 4 filings via EDGAR full-text search, filtered by company CIK
-	// Use date range to get recent filings (last 2 years)
-	const twoYearsAgo = new Date()
-	twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-	const startDate = twoYearsAgo.toISOString().split('T')[0]
-
-	const params = new URLSearchParams({
-		q: `"${paddedCik}"`,
-		forms: '4',
-		dateRange: 'custom',
-		startdt: startDate,
-	})
-
-	const url = `${SEARCH_BASE}/LATEST/search-index?${params}`
-	const res = await fetchWithAgent(url, rateLimits)
-
+	const paddedCik = padCik(cik)
+	const submissionsResponse = await fetchWithAgent(
+		`${DATA_BASE}/submissions/${paddedCik}.json`,
+		rateLimits,
+	)
+	if (!submissionsResponse.ok) {
+		throw new Error(
+			`Failed to fetch insider submissions: ${submissionsResponse.status} ${submissionsResponse.statusText}`,
+		)
+	}
+	const submissions = (await submissionsResponse.json()) as SubmissionsResponse
+	const recent = submissions.filings?.recent
 	const transactions: InsiderTransaction[] = []
-
 	const insiderLimit = (args.limit as number | undefined) ?? 20
-	if (res.ok) {
-		const data = (await res.json()) as EdgarSearchResponse
-		const hits = data.hits?.hits ?? []
+	if (!recent || insiderLimit <= 0) {
+		return { data: transactions, source: 'sec-edgar', cached: false }
+	}
 
-		for (const hit of hits) {
-			const src = hit._source
-			// Verify this filing is for the correct company by checking CIKs
-			if (src.ciks && !src.ciks.some((c) => c.replace(/^0+/, '') === String(cik))) {
-				continue
-			}
-			// display_names: [0] = insider/filer, [1] = company
-			// Skip if the first entry is the company itself (company-filed Form 4)
-			const filerRaw = src.display_names?.[0] ?? ''
-			const filerName = filerRaw.replace(/\s*\(CIK \d+\)/, '').trim()
-			if (!filerName || filerName.toLowerCase().includes(symbol.toLowerCase())) continue
+	// The issuer submissions feed is authoritative for recent Forms 4 and 4/A.
+	// Fetch at most five small ownership documents so a single tool call remains
+	// comfortably inside the SEC fair-access ceiling.
+	const form4Indexes: number[] = []
+	for (let index = 0; index < recent.form.length; index++) {
+		if (recent.form[index] === '4' || recent.form[index] === '4/A') form4Indexes.push(index)
+		if (form4Indexes.length >= Math.min(insiderLimit, 5)) break
+	}
 
+	for (const index of form4Indexes) {
+		const accessionNumber = recent.accessionNumber[index]
+		const primaryDocument = recent.primaryDocument[index]?.split('/').at(-1)
+		if (!accessionNumber || !primaryDocument) continue
+		const archiveUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replaceAll('-', '')}/${encodeURIComponent(primaryDocument)}`
+		const documentResponse = await fetchWithAgent(archiveUrl, rateLimits, 'application/xml')
+		if (!documentResponse.ok) continue
+		const xml = await documentResponse.text()
+		const ownerName = xmlValue(xml, 'rptOwnerName') ?? 'Unknown reporting owner'
+		const ownerTitle =
+			xmlValue(xml, 'officerTitle') ??
+			(xmlValue(xml, 'isDirector') === 'true' ? 'Director' : undefined)
+		const filingDate = recent.filingDate[index] ?? 'unknown'
+		const transactionXml = [
+			...xml.matchAll(/<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/g),
+		]
+
+		if (transactionXml.length === 0) {
 			transactions.push({
-				name: filerName,
-				transactionDate: src.file_date ?? 'unknown',
-				transactionType: src.form ?? 'Form 4',
+				name: ownerName,
+				...(ownerTitle ? { title: ownerTitle } : {}),
+				transactionDate: xmlValue(xml, 'periodOfReport') ?? filingDate,
+				transactionType: recent.form[index] ?? 'Form 4',
 				shares: 0,
-				description: src.file_description,
-				accessionNumber: src.adsh ?? hit._id,
+				description: recent.primaryDocDescription[index] ?? 'SEC ownership filing',
+				accessionNumber,
 				source: 'sec-edgar',
 			})
 		}
 
-		// Sort by filing date descending (search returns relevance order)
-		transactions.sort((a, b) => b.transactionDate.localeCompare(a.transactionDate))
+		for (const match of transactionXml) {
+			const transaction = match[1] ?? ''
+			const shares = xmlNumber(xmlSection(transaction, 'transactionShares')) ?? 0
+			const pricePerShare = xmlNumber(xmlSection(transaction, 'transactionPricePerShare'))
+			const sharesOwned = xmlNumber(xmlSection(transaction, 'sharesOwnedFollowingTransaction'))
+			const code = xmlValue(transaction, 'transactionCode')
+			const acquiredDisposed = xmlValue(
+				xmlSection(transaction, 'transactionAcquiredDisposedCode'),
+				'value',
+			)
+			const direction =
+				acquiredDisposed === 'A' ? 'acquired' : acquiredDisposed === 'D' ? 'disposed' : undefined
+			transactions.push({
+				name: ownerName,
+				...(ownerTitle ? { title: ownerTitle } : {}),
+				transactionDate:
+					xmlValue(xmlSection(transaction, 'transactionDate'), 'value') ?? filingDate,
+				transactionType: [code, direction].filter(Boolean).join(' ') || 'Form 4',
+				shares,
+				...(pricePerShare != null ? { pricePerShare } : {}),
+				...(pricePerShare != null ? { totalValue: shares * pricePerShare } : {}),
+				...(sharesOwned != null ? { sharesOwned } : {}),
+				description: xmlValue(xmlSection(transaction, 'securityTitle'), 'value'),
+				accessionNumber,
+				source: 'sec-edgar',
+			})
+			if (transactions.length >= insiderLimit) break
+		}
+		if (transactions.length >= insiderLimit) break
 	}
 
+	transactions.sort((a, b) => b.transactionDate.localeCompare(a.transactionDate))
 	return { data: transactions.slice(0, insiderLimit), source: 'sec-edgar', cached: false }
+}
+
+function xmlSection(xml: string, tag: string): string {
+	const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+	return match?.[1] ?? ''
+}
+
+function xmlValue(xml: string, tag: string): string | undefined {
+	const value = xmlSection(xml, tag)
+	if (!value) return undefined
+	const decoded = value
+		.replace(/<[^>]+>/g, '')
+		.replace(/&amp;/g, '&')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.trim()
+	return decoded || undefined
+}
+
+function xmlNumber(xml: string): number | undefined {
+	const raw = xmlValue(xml, 'value')
+	if (!raw) return undefined
+	const value = Number(raw.replaceAll(',', ''))
+	return Number.isFinite(value) ? value : undefined
 }
 
 // --- Provider definition ---

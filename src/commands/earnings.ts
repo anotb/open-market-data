@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { formatTable } from '../core/formatter.js'
 import { route } from '../core/router.js'
 import type { EarningsData, GlobalOptions } from '../types.js'
+import { symbol as normalizedSymbol } from './validation.js'
 
 export function registerEarningsCommand(program: Command): void {
 	program
@@ -9,10 +10,11 @@ export function registerEarningsCommand(program: Command): void {
 		.description('Get earnings data and upcoming dates')
 		.action(async (symbol: string) => {
 			const opts = program.opts<GlobalOptions>()
+			const ticker = normalizedSymbol(symbol)
 			const result = await route<EarningsData[]>(
 				'earnings',
 				'get',
-				{ symbol },
+				{ symbol: ticker },
 				{
 					source: opts.source,
 					noCache: opts.noCache,
@@ -20,7 +22,11 @@ export function registerEarningsCommand(program: Command): void {
 			)
 
 			if (result.data.length === 0) {
-				console.log('No earnings data available.')
+				console.log(
+					opts.format === 'markdown'
+						? 'No earnings data available.'
+						: formatTable(['Date', 'EPS Est.', 'EPS Actual', 'Surprise'], [], opts.format),
+				)
 				return
 			}
 

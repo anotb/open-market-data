@@ -1,16 +1,18 @@
 import { loadConfig } from '../core/config.js'
+import { fetchWithTimeout, readBoundedResponseText } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { CryptoCandle, CryptoQuote, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './types.js'
 
 const BASE_URL = 'https://api.coingecko.com/api/v3'
+const SOURCE = 'coingecko'
 
 const rateLimits: RateLimitConfig = {
 	maxRequests: 30,
 	windowMs: 60_000,
 }
 
-const SYMBOL_TO_ID: Record<string, string> = {
+const SYMBOL_TO_ID: Readonly<Record<string, string>> = {
 	BTC: 'bitcoin',
 	ETH: 'ethereum',
 	SOL: 'solana',
@@ -27,32 +29,24 @@ const SYMBOL_TO_ID: Record<string, string> = {
 	LTC: 'litecoin',
 }
 
-function getApiKey(): string {
-	const config = loadConfig()
-	const key = config.coingeckoApiKey
-	if (!key) {
-		throw new Error(
-			'CoinGecko API key not configured. Set COINGECKO_API_KEY or run: omd config set coingeckoApiKey <key>',
-		)
-	}
-	return key
-}
-
 async function request<T>(path: string): Promise<T> {
-	if (!consumeToken('coingecko', rateLimits)) {
+	if (!consumeToken(SOURCE, rateLimits)) {
 		throw new Error('CoinGecko rate limit exceeded')
 	}
 
-	const key = getApiKey()
-	const res = await fetch(`${BASE_URL}${path}`, {
-		headers: { 'x-cg-demo-api-key': key },
-	})
+	const key = loadConfig().coingeckoApiKey
+	const options = key ? { headers: { 'x-cg-demo-api-key': key } } : undefined
+	const response = await fetchWithTimeout(`${BASE_URL}${path}`, options)
 
-	if (!res.ok) {
-		const body = await res.text()
-		throw new Error(`CoinGecko API error ${res.status}: ${body}`)
+	if (!response.ok) {
+		const body = await readBoundedResponseText(response)
+		const hint =
+			response.status === 429 && !key
+				? ' Configure a free CoinGecko Demo key for a dedicated quota.'
+				: ''
+		throw new Error(`CoinGecko API error ${response.status}: ${body}${hint}`)
 	}
-	return res.json() as Promise<T>
+	return response.json() as Promise<T>
 }
 
 interface SearchCoin {
@@ -67,15 +61,17 @@ interface SearchResponse {
 }
 
 async function resolveCoinId(symbol: string): Promise<string> {
-	const upper = symbol.toUpperCase()
-	const mapped = SYMBOL_TO_ID[upper]
+	const normalized = symbol.trim().toUpperCase()
+	const mapped = SYMBOL_TO_ID[normalized]
 	if (mapped) return mapped
 
 	const data = await request<SearchResponse>(`/search?query=${encodeURIComponent(symbol)}`)
-	if (data.coins.length === 0) {
+	const exact = data.coins.find((coin) => coin.symbol.toUpperCase() === normalized)
+	const coin = exact ?? data.coins[0]
+	if (!coin) {
 		throw new Error(`CoinGecko: could not resolve coin ID for symbol "${symbol}"`)
 	}
-	return data.coins[0].id
+	return coin.id
 }
 
 interface SimplePriceEntry {
@@ -90,27 +86,24 @@ async function getQuote(symbol: string): Promise<ProviderResult<CryptoQuote>> {
 	const data = await request<Record<string, SimplePriceEntry>>(
 		`/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
 	)
-
 	const entry = data[id]
-	if (!entry) {
-		throw new Error(`CoinGecko: no price data for "${id}"`)
+	if (!entry || !Number.isFinite(entry.usd) || entry.usd <= 0) {
+		throw new Error(`CoinGecko: no usable price data for "${id}"`)
 	}
 
 	const changePercent = entry.usd_24h_change
-	// usd_24h_change is a percentage — compute absolute dollar change from price
 	const change24h = changePercent != null ? entry.usd * (changePercent / 100) : undefined
-
 	return {
 		data: {
-			symbol: symbol.toUpperCase(),
+			symbol: symbol.trim().toUpperCase(),
 			price: entry.usd,
 			change24h,
 			changePercent24h: changePercent,
 			volume24h: entry.usd_24h_vol,
 			marketCap: entry.usd_market_cap,
-			source: 'coingecko',
+			source: SOURCE,
 		},
-		source: 'coingecko',
+		source: SOURCE,
 		cached: false,
 	}
 }
@@ -132,46 +125,39 @@ interface MarketCoin {
 }
 
 async function getTop(limit = 10): Promise<ProviderResult<CryptoQuote[]>> {
+	const boundedLimit = Math.max(1, Math.min(250, Math.trunc(limit)))
 	const data = await request<MarketCoin[]>(
-		`/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&sparkline=false`,
+		`/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${boundedLimit}&sparkline=false`,
 	)
-
-	const quotes: CryptoQuote[] = data.map((c) => ({
-		symbol: c.symbol.toUpperCase(),
-		name: c.name,
-		price: c.current_price,
-		change24h: c.price_change_24h ?? undefined,
-		changePercent24h: c.price_change_percentage_24h ?? undefined,
-		volume24h: c.total_volume,
-		marketCap: c.market_cap,
-		marketCapRank: c.market_cap_rank,
-		high24h: c.high_24h ?? undefined,
-		low24h: c.low_24h ?? undefined,
-		circulatingSupply: c.circulating_supply ?? undefined,
-		ath: c.ath ?? undefined,
-		source: 'coingecko',
+	const quotes: CryptoQuote[] = data.map((coin) => ({
+		symbol: coin.symbol.toUpperCase(),
+		name: coin.name,
+		price: coin.current_price,
+		change24h: coin.price_change_24h ?? undefined,
+		changePercent24h: coin.price_change_percentage_24h ?? undefined,
+		volume24h: coin.total_volume,
+		marketCap: coin.market_cap,
+		marketCapRank: coin.market_cap_rank,
+		high24h: coin.high_24h ?? undefined,
+		low24h: coin.low_24h ?? undefined,
+		circulatingSupply: coin.circulating_supply ?? undefined,
+		ath: coin.ath ?? undefined,
+		source: SOURCE,
 	}))
-
-	return { data: quotes, source: 'coingecko', cached: false }
+	return { data: quotes, source: SOURCE, cached: false }
 }
 
 type OhlcEntry = [number, number, number, number, number]
 
 interface MarketChartResponse {
-	prices: [number, number][]
 	total_volumes: [number, number][]
 }
 
-// CoinGecko OHLC endpoint only accepts specific day values
-const VALID_OHLC_DAYS = [1, 7, 14, 30, 90, 180, 365]
+const VALID_OHLC_DAYS = [1, 7, 14, 30, 90, 180, 365] as const
 
 function snapToValidDays(days: number): number | 'max' {
 	if (days > 365) return 'max'
-	// Find the smallest valid value >= requested days
-	for (const valid of VALID_OHLC_DAYS) {
-		if (valid >= days) return valid
-	}
-	return 365
+	return VALID_OHLC_DAYS.find((valid) => valid >= days) ?? 365
 }
 
 async function getHistory(
@@ -180,114 +166,89 @@ async function getHistory(
 	_interval?: string,
 ): Promise<ProviderResult<CryptoCandle[]>> {
 	const id = await resolveCoinId(symbol)
-
-	// CoinGecko auto-selects granularity based on days:
-	// 1-2 days → 30min, 3-30 → 4h, 31-365 → daily, 365+ → weekly
-	// The --interval flag is only honored by Binance; CoinGecko uses days-based auto-interval.
-	const ohlcDays = snapToValidDays(days)
+	const ohlcDays = snapToValidDays(Math.max(1, Math.trunc(days)))
 	const [ohlcData, chartData] = await Promise.all([
 		request<OhlcEntry[]>(`/coins/${id}/ohlc?vs_currency=usd&days=${ohlcDays}`),
-		// Use same snapped days so volume data covers the full OHLC range
 		request<MarketChartResponse>(`/coins/${id}/market_chart?vs_currency=usd&days=${ohlcDays}`),
 	])
 
-	// Build a volume lookup by timestamp (rounded to nearest hour)
 	const volumeMap = new Map<number, number>()
-	for (const [ts, vol] of chartData.total_volumes) {
-		volumeMap.set(Math.round(ts / 3600000), vol)
+	for (const [timestamp, volume] of chartData.total_volumes) {
+		volumeMap.set(Math.round(timestamp / 3_600_000), volume)
 	}
-
-	const candles: CryptoCandle[] = ohlcData.map((entry) => {
-		const tsHour = Math.round(entry[0] / 3600000)
-		return {
-			time: new Date(entry[0]).toISOString(),
-			open: entry[1],
-			high: entry[2],
-			low: entry[3],
-			close: entry[4],
-			volume: volumeMap.get(tsHour) ?? 0,
-		}
-	})
-
-	return { data: candles, source: 'coingecko', cached: false }
-}
-
-interface TrendingCoin {
-	item: {
-		id: string
-		coin_id: number
-		name: string
-		symbol: string
-		market_cap_rank: number | null
-		price_btc: number
-		data?: {
-			price: number
-			price_change_percentage_24h?: Record<string, number>
-			market_cap?: string
-			total_volume?: string
-		}
-	}
+	const candles: CryptoCandle[] = ohlcData.map((entry) => ({
+		time: new Date(entry[0]).toISOString(),
+		open: entry[1],
+		high: entry[2],
+		low: entry[3],
+		close: entry[4],
+		volume: volumeMap.get(Math.round(entry[0] / 3_600_000)) ?? 0,
+	}))
+	return { data: candles, source: SOURCE, cached: false }
 }
 
 interface TrendingResponse {
-	coins: TrendingCoin[]
+	coins: Array<{
+		item: {
+			name: string
+			symbol: string
+			market_cap_rank: number | null
+			data?: {
+				price: number
+				price_change_percentage_24h?: Record<string, number>
+			}
+		}
+	}>
 }
 
 async function getTrending(): Promise<ProviderResult<CryptoQuote[]>> {
 	const data = await request<TrendingResponse>('/search/trending')
-
-	const quotes: CryptoQuote[] = data.coins.map((c) => ({
-		symbol: c.item.symbol.toUpperCase(),
-		name: c.item.name,
-		price: c.item.data?.price ?? 0,
-		marketCapRank: c.item.market_cap_rank ?? undefined,
-		changePercent24h: c.item.data?.price_change_percentage_24h?.usd,
-		source: 'coingecko',
+	const quotes: CryptoQuote[] = data.coins.map(({ item }) => ({
+		symbol: item.symbol.toUpperCase(),
+		name: item.name,
+		price: item.data?.price ?? 0,
+		marketCapRank: item.market_cap_rank ?? undefined,
+		changePercent24h: item.data?.price_change_percentage_24h?.usd,
+		source: SOURCE,
 	}))
-
-	return { data: quotes, source: 'coingecko', cached: false }
+	return { data: quotes, source: SOURCE, cached: false }
 }
 
-interface GlobalData {
-	data: {
-		active_cryptocurrencies: number
-		markets: number
-		total_market_cap: Record<string, number>
-		total_volume: Record<string, number>
-		market_cap_percentage: Record<string, number>
-		market_cap_change_percentage_24h_usd: number
-	}
+interface GlobalMarketData {
+	active_cryptocurrencies: number
+	markets: number
+	total_market_cap: Record<string, number>
+	total_volume: Record<string, number>
+	market_cap_percentage: Record<string, number>
+	market_cap_change_percentage_24h_usd: number
 }
 
-async function getGlobal(): Promise<ProviderResult<GlobalData['data']>> {
-	const data = await request<GlobalData>('/global')
-
-	return { data: data.data, source: 'coingecko', cached: false }
+async function getGlobal(): Promise<ProviderResult<GlobalMarketData>> {
+	const response = await request<{ data: GlobalMarketData }>('/global')
+	return { data: response.data, source: SOURCE, cached: false }
 }
 
 async function search(query: string): Promise<ProviderResult<SearchResult[]>> {
 	const data = await request<SearchResponse>(`/search?query=${encodeURIComponent(query)}`)
-
-	const results: SearchResult[] = data.coins.map((c) => ({
-		symbol: c.symbol.toUpperCase(),
-		name: c.name,
+	const results: SearchResult[] = data.coins.map((coin) => ({
+		symbol: coin.symbol.toUpperCase(),
+		name: coin.name,
 		type: 'crypto',
-		source: 'coingecko',
+		source: SOURCE,
 	}))
-
-	return { data: results, source: 'coingecko', cached: false }
+	return { data: results, source: SOURCE, cached: false }
 }
 
 export const coingecko: Provider = {
-	name: 'coingecko',
-	requiresKey: true,
+	name: SOURCE,
+	requiresKey: false,
 	keyEnvVar: 'COINGECKO_API_KEY',
 	capabilities: ['crypto', 'search'] as DataCategory[],
 	priority: { crypto: 2, search: 4 },
 	rateLimits,
 
 	isEnabled(): boolean {
-		return !!loadConfig().coingeckoApiKey
+		return true
 	},
 
 	async execute<T = unknown>(
@@ -296,35 +257,27 @@ export const coingecko: Provider = {
 		args: Record<string, unknown>,
 	): Promise<ProviderResult<T>> {
 		if (category === 'search') {
-			switch (action) {
-				case 'search':
-					return (await search(args.query as string)) as ProviderResult<T>
-				default:
-					throw new Error(`CoinGecko search does not support action: ${action}`)
+			if (action !== 'search') {
+				throw new Error(`CoinGecko search does not support action: ${action}`)
 			}
+			return (await search(args.query as string)) as ProviderResult<T>
 		}
 
-		// category === 'crypto'
 		switch (action) {
 			case 'quote':
 				return (await getQuote(args.symbol as string)) as ProviderResult<T>
-
 			case 'top':
 				return (await getTop(args.limit as number | undefined)) as ProviderResult<T>
-
 			case 'history':
 				return (await getHistory(
 					args.symbol as string,
 					(args.days as number) ?? 30,
 					args.interval as string | undefined,
 				)) as ProviderResult<T>
-
 			case 'trending':
 				return (await getTrending()) as ProviderResult<T>
-
 			case 'global':
 				return (await getGlobal()) as ProviderResult<T>
-
 			default:
 				throw new Error(`CoinGecko crypto does not support action: ${action}`)
 		}

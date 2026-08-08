@@ -45,28 +45,40 @@ export async function route<T = unknown>(
 	args: Record<string, unknown>,
 	options: RouteOptions = {},
 ): Promise<ProviderResult<T>> {
-	// Check cache first
-	if (!options.noCache) {
-		const cacheKey = { action, ...args }
-		// Try provider-specific cache if source forced
-		if (options.source) {
-			const cached_data = cache.get<T>(options.source, category, cacheKey)
-			if (cached_data) return { data: cached_data, source: options.source, cached: true }
-		} else {
-			// Try cache from enabled providers that support this category
-			for (const p of providers.filter((p) => p.capabilities.includes(category) && p.isEnabled())) {
-				const cached_data = cache.get<T>(p.name, category, cacheKey)
-				if (cached_data) return { data: cached_data, source: p.name, cached: true }
-			}
-		}
-	}
-
+	// Resolve availability before consulting the cache so disabled or
+	// unconfigured providers can never leak stale values back into a request.
 	let candidates = getProvidersForCategory(category)
 
 	if (options.source) {
-		candidates = candidates.filter((p) => p.name === options.source)
-		if (candidates.length === 0) {
+		const requested = providers.find(
+			(provider) => provider.name === options.source && provider.capabilities.includes(category),
+		)
+		if (!requested) {
 			throw new Error(`Source "${options.source}" not available for category "${category}"`)
+		}
+		const config = loadConfig()
+		if (new Set(config.disabledSources ?? []).has(requested.name)) {
+			throw new Error(`Source "${requested.name}" is disabled in configuration`)
+		}
+		if (!requested.isEnabled()) {
+			if (requested.keyEnvVar) {
+				throw new Error(
+					`Source "${requested.name}" is not configured; set ${requested.keyEnvVar} or run "omd config set" with the provider key`,
+				)
+			}
+			throw new Error(`Source "${requested.name}" is unavailable in this environment`)
+		}
+		candidates = candidates.filter((p) => p.name === options.source)
+	}
+
+	// Check only caches belonging to providers that are currently eligible.
+	if (!options.noCache) {
+		const cacheKey = { action, ...args }
+		for (const provider of candidates) {
+			const cachedData = cache.get<T>(provider.name, category, cacheKey)
+			if (cachedData !== undefined) {
+				return { data: cachedData, source: provider.name, cached: true }
+			}
 		}
 	}
 
@@ -104,7 +116,6 @@ export async function route<T = unknown>(
 	for (const provider of candidates) {
 		try {
 			const result = await provider.execute<T>(category, action, args)
-			// Cache the result
 			if (!options.noCache) {
 				cache.set(provider.name, category, { action, ...args }, result.data)
 			}
@@ -118,6 +129,11 @@ export async function route<T = unknown>(
 	const sources = candidates.map((p) => p.name).join(', ')
 	const lastError = errors[errors.length - 1]
 	throw new Error(
-		`All providers failed for ${category}/${action} (tried: ${sources}): ${lastError?.message}`,
+		`All providers failed for ${category}/${action} (tried: ${sources}): ${boundedErrorMessage(lastError)}`,
 	)
+}
+
+function boundedErrorMessage(error: Error | undefined): string {
+	const compact = (error?.message ?? 'Unknown provider error').replace(/\s+/g, ' ').trim()
+	return compact.length <= 500 ? compact : `${compact.slice(0, 497)}...`
 }

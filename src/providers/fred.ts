@@ -1,4 +1,5 @@
 import { loadConfig } from '../core/config.js'
+import { fetchWithTimeout, readBoundedResponseText } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { MacroDataPoint, MacroSeries, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult } from './types.js'
@@ -62,10 +63,10 @@ async function fredFetch<T>(
 		}
 	}
 
-	const response = await fetch(url.toString())
+	const response = await fetchWithTimeout(url)
 
 	if (!response.ok) {
-		const text = await response.text()
+		const text = await readBoundedResponseText(response)
 		throw new Error(`FRED API error (${response.status}): ${text}`)
 	}
 

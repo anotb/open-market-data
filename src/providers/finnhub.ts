@@ -1,4 +1,5 @@
 import { loadConfig } from '../core/config.js'
+import { fetchWithTimeout, readBoundedResponseText } from '../core/http.js'
 import { consumeToken } from '../core/rate-limiter.js'
 import type { EarningsData, HistoricalQuote, QuoteResult, SearchResult } from '../types.js'
 import type { DataCategory, Provider, ProviderResult, RateLimitConfig } from './types.js'
@@ -26,9 +27,9 @@ async function request<T>(path: string): Promise<T> {
 	const separator = path.includes('?') ? '&' : '?'
 	const url = `${BASE_URL}${path}${separator}token=${getKey()}`
 
-	const res = await fetch(url)
+	const res = await fetchWithTimeout(url)
 	if (!res.ok) {
-		const body = await res.text()
+		const body = await readBoundedResponseText(res)
 		throw new Error(`[${SOURCE}] API error ${res.status}: ${body}`)
 	}
 	return res.json() as Promise<T>

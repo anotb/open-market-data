@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "open-market-data",
+  "version": "0.2.0",
+  "description": "Read-only stock, SEC, crypto, and macroeconomic data with normalized provenance for AI agents.",
+  "author": {
+    "name": "anotb",
+    "url": "https://github.com/anotb"
+  },
+  "homepage": "https://github.com/anotb/open-market-data",
+  "repository": "https://github.com/anotb/open-market-data",
+  "license": "MIT",
+  "keywords": [
+    "finance",
+    "market-data",
+    "stocks",
+    "sec-edgar",
+    "crypto",
+    "macroeconomics",
+    "agent-skills",
+    "mcp"
+  ]
+}

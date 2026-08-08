@@ -1,7 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { canRequest, consumeToken, getRemaining, resetBucket } from '../src/core/rate-limiter.js'
+import { beforeEach, describe, expect, it } from 'vitest'
 import * as cache from '../src/core/cache.js'
-import { formatTable, formatKeyValue, formatNumber, formatCurrency, formatPercent } from '../src/core/formatter.js'
+import {
+	formatCurrency,
+	formatKeyValue,
+	formatNumber,
+	formatPercent,
+	formatTable,
+} from '../src/core/formatter.js'
+import { canRequest, consumeToken, getRemaining, resetBucket } from '../src/core/rate-limiter.js'
 import type { RateLimitConfig } from '../src/providers/types.js'
 
 describe('rate-limiter', () => {
