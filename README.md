@@ -4,26 +4,26 @@
 [![npm](https://img.shields.io/npm/v/open-market-data)](https://www.npmjs.com/package/open-market-data)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A portable Agent Plugin for read-only stock, company, SEC, crypto, and macroeconomic data. Use the same normalized data layer from Agent Skills, MCP, TypeScript, or the CLI.
+`open-market-data` is a read-only data layer for stocks, company fundamentals, SEC filings, crypto, and macroeconomic data. The Agent Skill, MCP server, TypeScript client, and CLI all return the same normalized results.
 
 ```text
 one package -> capability routing -> free public data sources -> normalized data + provenance
 ```
 
-Stock, SEC, World Bank, and CoinGecko features work without an API key. Optional free keys add US macro data, dedicated crypto quota, and more fallback capacity.
+You can use stock data, SEC filings, World Bank indicators, and CoinGecko without an API key. Optional free keys add FRED data, a dedicated CoinGecko quota, and more fallback providers.
 
 ## Why use it
 
-- **Portable by default:** Agent Plugins 1.0.0 package with an Agent Skill and local stdio MCP server
-- **Agent-safe:** explicit read-only tools with JSON Schemas, bounded results, and source metadata
-- **Useful without setup:** stock, SEC, World Bank, and CoinGecko data work without keys; Binance is also keyless where regionally available
-- **Resilient:** capability-based routing, provider fallback, rate-limit awareness, caching, and built-in source health checks
-- **One implementation:** the same catalog powers the Agent Plugin, CLI, TypeScript API, MCP server, and experimental WebMCP adapter
-- **Trustworthy by design:** every response identifies its source and whether it came from cache
+- **One package, several interfaces:** use it as an Agent Plugin, MCP server, TypeScript library, CLI, or experimental WebMCP adapter
+- **Read-only tools:** each tool has a narrow JSON Schema, bounded output, and no trading or arbitrary execution capability
+- **Useful without keys:** stock, SEC, World Bank, and CoinGecko data work out of the box; Binance is also keyless where available
+- **Provider fallback:** capability routing, caching, rate-limit awareness, and health checks help handle upstream outages
+- **Consistent results:** every interface uses the same tool catalog and normalized provider layer
+- **Clear provenance:** responses identify their source and say whether the result came from cache
 
 ## Install as an Agent Plugin
 
-The repository root now follows the vendor-neutral **Agent Plugins 1.0.0** layout:
+The repository follows the vendor-neutral **Agent Plugins 1.0.0** layout:
 
 ```text
 plugin.json                     portable plugin identity
@@ -33,21 +33,21 @@ mcp.json                        portable local stdio MCP server
 .mcp.json                       current ChatGPT/Codex bundled MCP config
 ```
 
-Compatible clients can load the skill and MCP server from one package. The current ChatGPT/Codex compatibility files remain alongside the portable format so adoption does not depend on every client finishing migration at the same time.
+Compatible clients can load both the skill and MCP server from the package. ChatGPT/Codex compatibility files live alongside the portable manifests for clients that still use them.
 
-After the npm release, ChatGPT/Codex users can add the repository marketplace:
+ChatGPT/Codex users can add the repository as a plugin marketplace:
 
 ```bash
 codex plugin marketplace add anotb/open-market-data
 ```
 
-The marketplace installs the compiled npm package. Source-checkout users should run `pnpm build` before loading the repository directly.
+The marketplace installs the compiled npm package. If you load a source checkout instead, run `pnpm build` first.
 
 See [docs/AGENT-PLUGIN.md](docs/AGENT-PLUGIN.md) for package structure, validation, compatibility, and distribution details.
 
 ## Connect an AI agent
 
-The package includes a built-in stdio MCP server with no separate service or MCP runtime dependency. It supports the current stateless `2026-07-28` protocol and session-based legacy clients, so existing agent hosts can adopt it without a compatibility proxy. The shortest setup is:
+The package includes a local stdio MCP server, so there is no separate service to deploy. It supports the stateless `2026-07-28` protocol as well as session-based legacy clients. The simplest setup is:
 
 ```bash
 # Claude Code
@@ -84,7 +84,7 @@ For VS Code:
 }
 ```
 
-Agents receive seventeen narrow tools instead of an arbitrary shell command:
+Agents receive seventeen purpose-built, read-only tools rather than shell access:
 
 | Area | Tools |
 |---|---|
@@ -95,7 +95,7 @@ Agents receive seventeen narrow tools instead of an arbitrary shell command:
 | Crypto | `crypto_quote`, `crypto_top`, `crypto_history` |
 | Macro | `macro_series`, `macro_search` |
 
-`company_snapshot` is the best starting point for company research. It returns a compact quote, recent performance, quarterly financials, earnings, and recent SEC filings in one call, with partial results if one upstream source is unavailable.
+For company research, start with `company_snapshot`. It combines a quote, recent performance, quarterly financials, earnings, and recent SEC filings. If one provider is unavailable, the tool returns the available components and reports the missing ones explicitly.
 
 See [docs/AGENT-PLUGIN.md](docs/AGENT-PLUGIN.md) for portable packaging and [docs/MCP.md](docs/MCP.md) for direct MCP configuration, response envelopes, WebMCP, troubleshooting, and registry publishing.
 
@@ -160,7 +160,7 @@ omd --source worldbank macro get NY.GDP.MKTP.CD
 npm install open-market-data
 ```
 
-The high-level client registers providers automatically. It is safer and easier than calling the low-level router directly.
+The high-level client registers providers for you and avoids the need to call the low-level router directly.
 
 ```ts
 import { openMarketData } from 'open-market-data'
@@ -181,7 +181,7 @@ const health = await openMarketData.health()
 console.log(health.data)
 ```
 
-Every high-level method is fully typed and returns the same generic envelope:
+Every high-level method is typed and returns the same response envelope:
 
 ```ts
 type AgentToolResponse<T> = {
@@ -204,9 +204,9 @@ Advanced users can import the MCP primitives from `open-market-data/mcp` and the
 
 ## Experimental WebMCP adapter
 
-WebMCP is an experimental W3C Community Group draft for exposing page-level JavaScript tools to browser agents. The adapter feature-detects the API and does nothing on unsupported browsers.
+WebMCP is an experimental W3C Community Group draft for exposing page-level JavaScript tools to browser agents. The adapter checks for browser support at runtime and otherwise does nothing.
 
-The browser adapter intentionally does not bundle Node providers or expose API keys. Point it at a same-origin endpoint that executes the shared tool catalog:
+The browser adapter does not bundle Node providers or expose API keys. Point it at a same-origin endpoint that runs the shared tool catalog:
 
 ```ts
 import { registerOpenMarketDataWebMcp } from 'open-market-data/webmcp'
@@ -228,7 +228,7 @@ All registered browser tools are marked read-only, and their upstream content is
 
 ## Data sources
 
-`omd` selects the best enabled provider for each capability and falls back when possible.
+By default, `omd` chooses an enabled provider for the requested capability and falls back to another one when possible.
 
 | Source | API key | Main capabilities |
 |---|---:|---|
@@ -241,7 +241,7 @@ All registered browser tools are marked read-only, and their upstream content is
 | Finnhub | Free | Quotes and earnings fallback |
 | Alpha Vantage | Free | Quotes, financials, and history fallback |
 
-Run `omd sources` or call `provider_status` for a network-free capability inventory. Run `omd doctor` or call `provider_health` to make small live probes against all eight providers; missing optional keys, disabled sources, regional restrictions, transient unavailability, and invalid responses are reported as distinct states. See [docs/PROVIDERS.md](docs/PROVIDERS.md) for rate limits and provider details.
+Run `omd sources` or call `provider_status` to inspect capabilities without making network requests. Use `omd doctor` or `provider_health` for small live probes against all eight providers. The health report distinguishes missing keys, disabled sources, regional restrictions, transient outages, and invalid responses. See [docs/PROVIDERS.md](docs/PROVIDERS.md) for rate limits and provider details.
 
 ## API keys and optional quotas
 
@@ -265,7 +265,7 @@ Set `EDGAR_USER_AGENT` to a descriptive contact string for sustained SEC EDGAR u
 
 ## Agent skill fallback
 
-MCP is preferred for clients that support it. The repository also ships a CLI skill at `skills/open-market-data/SKILL.md` for agents that can run shell commands but do not support MCP.
+Use MCP when the client supports it. For agents that can run commands but cannot connect to MCP, the package also includes a CLI skill at `skills/open-market-data/SKILL.md`.
 
 ```bash
 # From a global npm installation
@@ -281,12 +281,14 @@ cp -r skills/open-market-data ~/.claude/skills/
 pnpm install
 pnpm validate:plugin  # portable and ChatGPT/Codex manifest checks
 pnpm test             # deterministic offline unit and protocol tests
-pnpm test:live    # real upstream provider smoke tests
-pnpm check        # lint, typecheck, and offline tests
+pnpm test:live        # local checks against real upstream providers
+pnpm check            # lint, typecheck, and offline tests
 pnpm build
 ```
 
-Default tests never require network access. They cover the agent catalog, typed runtime, provider-health classification, modern and legacy MCP behavior, stdio framing, WebMCP registration, provider-selection and cache-eligibility contracts, provider-specific edge cases, and a clean install from the packed npm artifact. Live checks are isolated in `*.live.test.ts` files and run on a scheduled GitHub Actions workflow, followed by a live smoke test from the packed artifact. Keyless sources, including CoinGecko's public API, always run; FRED, Finnhub, and Alpha Vantage run when their repository secrets are configured.
+The default test suite does not use the network. It covers the agent catalog, runtime, provider-health classification, modern and legacy MCP behavior, stdio framing, WebMCP registration, routing and cache contracts, provider edge cases, and clean installation from the packed npm artifact.
+
+Live checks live in `*.live.test.ts` files and run locally with `pnpm test:live`. Keeping them out of GitHub Actions avoids false alarms when a public provider is rate-limited, regionally restricted, or briefly inconsistent. Keyless providers always run; FRED, Finnhub, and Alpha Vantage tests run when their environment variables are configured.
 
 To inspect the built MCP server interactively:
 
@@ -301,7 +303,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for provider contracts, agent-tool requir
 
 ## Data and safety notes
 
-This project is read-only and does not place trades. Upstream data can be delayed, revised, incomplete, or temporarily unavailable. Preserve the returned provenance, verify important decisions against primary sources, and do not treat the output as investment advice.
+This project only reads data; it does not place trades. Upstream data may be delayed, revised, incomplete, or temporarily unavailable. Keep the returned provenance, verify consequential decisions against primary sources, and do not treat the output as investment advice.
 
 ## License
 

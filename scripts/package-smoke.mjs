@@ -17,10 +17,7 @@ try {
 	if (suppliedTarball) {
 		tarball = resolve(suppliedTarball)
 	} else {
-		const output = execFileSync('npm', ['pack', '--silent'], {
-			cwd: repositoryRoot,
-			encoding: 'utf8',
-		})
+		const output = run(commandShim('npm'), ['pack', '--silent'], repositoryRoot).stdout
 		const filename = output.trim().split(/\r?\n/).filter(Boolean).at(-1)
 		assert(filename, 'npm pack did not report a tarball filename')
 		tarball = resolve(repositoryRoot, filename)
@@ -61,7 +58,11 @@ try {
 		join(temporaryProject, 'package.json'),
 		`${JSON.stringify({ name: 'open-market-data-package-smoke', private: true, type: 'module' }, null, 2)}\n`,
 	)
-	run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball], temporaryProject)
+	run(
+		commandShim('npm'),
+		['install', '--ignore-scripts', '--no-audit', '--no-fund', tarball],
+		temporaryProject,
+	)
 
 	const installedPackageRoot = join(temporaryProject, 'node_modules', 'open-market-data')
 	for (const manifestName of ['mcp.json', '.mcp.json']) {
@@ -83,9 +84,9 @@ try {
 	}
 
 	const binaryDirectory = join(temporaryProject, 'node_modules', '.bin')
-	const omd = join(binaryDirectory, 'omd')
-	const mcp = join(binaryDirectory, 'omd-mcp')
-	const packageBinary = join(binaryDirectory, 'open-market-data')
+	const omd = join(binaryDirectory, commandShim('omd'))
+	const mcp = join(binaryDirectory, commandShim('omd-mcp'))
+	const packageBinary = join(binaryDirectory, commandShim('open-market-data'))
 	for (const binary of [omd, mcp, packageBinary]) {
 		assert(existsSync(binary), `Installed binary is missing: ${binary}`)
 	}
@@ -117,7 +118,7 @@ try {
 	)
 	assert(
 		run(
-			'npx',
+			commandShim('npx'),
 			['--no-install', 'open-market-data', '--version'],
 			temporaryProject,
 		).stdout.trim() === expectedVersion,
@@ -187,7 +188,10 @@ if (typeof webmcp.registerOpenMarketDataWebMcp !== 'function') throw new Error('
 }
 
 function run(command, args, cwd, input) {
-	const result = spawnSync(command, args, {
+	const usesWindowsCommandShim = process.platform === 'win32' && command.endsWith('.cmd')
+	const executable = usesWindowsCommandShim ? (process.env.ComSpec ?? 'cmd.exe') : command
+	const executableArgs = usesWindowsCommandShim ? ['/d', '/s', '/c', command, ...args] : args
+	const result = spawnSync(executable, executableArgs, {
 		cwd,
 		encoding: 'utf8',
 		input,
@@ -200,6 +204,10 @@ function run(command, args, cwd, input) {
 		)
 	}
 	return { stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+}
+
+function commandShim(command) {
+	return process.platform === 'win32' ? `${command}.cmd` : command
 }
 
 function assert(condition, message) {

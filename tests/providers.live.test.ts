@@ -259,10 +259,28 @@ describe('CoinGecko provider live API', () => {
 		expect(quote.data.price).toBeGreaterThan(0)
 	})
 
-	it('returns an ordered top-ten market ranking', async () => {
+	it('returns ten market leaders in descending market-cap order', async () => {
 		const result = await coingecko.execute<CryptoQuote[]>('crypto', 'top', { limit: 10 })
 		expect(result.data).toHaveLength(10)
-		expect(result.data.map((quote) => quote.marketCapRank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+		expect(
+			result.data.every(
+				(quote, index) =>
+					typeof quote.marketCapRank === 'number' &&
+					quote.marketCapRank > 0 &&
+					(index === 0 ||
+						(result.data[index - 1].marketCapRank ?? Number.POSITIVE_INFINITY) <=
+							quote.marketCapRank),
+			),
+		).toBe(true)
+		expect(
+			result.data.every(
+				(quote, index) =>
+					typeof quote.marketCap === 'number' &&
+					quote.marketCap > 0 &&
+					(index === 0 ||
+						(result.data[index - 1].marketCap ?? Number.NEGATIVE_INFINITY) >= quote.marketCap),
+			),
+		).toBe(true)
 		expect(result.data.every((quote) => quote.price > 0)).toBe(true)
 	})
 

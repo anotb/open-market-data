@@ -10,13 +10,15 @@ pnpm check
 pnpm build
 ```
 
-`pnpm check` is deterministic and does not call live providers. Run live smoke tests separately:
+`pnpm check` is deterministic and does not call live providers. Run live smoke tests locally and separately:
 
 ```bash
 pnpm test:live
 ```
 
 Live tests may require API keys and may be unavailable because of provider rate limits or regional restrictions. Never commit credentials or recorded responses containing credentials.
+
+When a checkout is shared between operating systems, keep `node_modules` and `dist` out of the sync set and recreate them on each machine. Installed dependencies can contain OS-specific links and native binaries even though both directories are ignored by Git.
 
 ## Adding or changing a provider
 
