@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "description": "Portable Agent Plugin and read-only SDK for market, SEC, crypto, and macroeconomic data",
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -27,7 +28,7 @@
   "mcpName": "io.github.anotb/open-market-data",
   "sideEffects": false,
   "scripts": {
-    "clean": "rm -rf dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
